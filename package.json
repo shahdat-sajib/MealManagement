@@ -7,7 +7,7 @@
     "npm": ">=8.0.0"
   },
   "scripts": {
-    "start": "node start.js",
+    "start": "node server.js",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "cd server && npm run dev",
     "client": "cd client && npm start",
