@@ -1,0 +1,12 @@
+# Nixpacks configuration for Railway
+[build]
+  # Install dependencies from root package.json
+  cmd = "npm install"
+
+[start]
+  # Start the server directly
+  cmd = "npm start"
+
+[variables]
+  # Ensure Railway uses the correct Node.js version
+  NODE_ENV = "production"
