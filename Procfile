@@ -1,2 +1,2 @@
 # Railway Deployment
-web: cd server && npm start
+web: node server/server.js
