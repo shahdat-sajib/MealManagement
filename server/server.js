@@ -8,46 +8,9 @@ dotenv.config();
 
 const app = express();
 
-// Middleware - More permissive CORS for Vercel deployments
+// Simplified CORS - Allow all origins for now to test
 const corsOptions = {
-  origin: function (origin, callback) {
-    console.log('🌐 CORS Check - Origin:', origin);
-    
-    // Allow requests with no origin
-    if (!origin) {
-      console.log('✅ No origin - allowing');
-      return callback(null, true);
-    }
-    
-    // In development, allow localhost
-    if (process.env.NODE_ENV !== 'production') {
-      if (origin.includes('localhost')) {
-        console.log('✅ Development localhost - allowing');
-        return callback(null, true);
-      }
-    }
-    
-    // Allow all Vercel deployments for your account
-    if (origin.includes('.vercel.app') && origin.includes('shahdats-projects')) {
-      console.log('✅ Vercel deployment - allowing');
-      return callback(null, true);
-    }
-    
-    // Allow specific environment variable
-    if (process.env.CORS_ORIGIN && origin === process.env.CORS_ORIGIN) {
-      console.log('✅ Environment CORS_ORIGIN - allowing');
-      return callback(null, true);
-    }
-    
-    // For development and testing, be more permissive
-    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-      console.log('✅ Local development - allowing');
-      return callback(null, true);
-    }
-    
-    console.log('❌ CORS blocked origin:', origin);
-    callback(new Error('Not allowed by CORS'));
-  },
+  origin: true, // Allow all origins temporarily
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
@@ -63,28 +26,25 @@ app.use((req, res, next) => {
   next();
 });
 
-// Manual CORS headers for maximum compatibility
+// Simple CORS headers - Allow everything for testing
 app.use((req, res, next) => {
   const origin = req.headers.origin;
+  console.log('🌐 Request from origin:', origin);
   
-  // Allow Vercel deployments
-  if (origin && (
-    origin.includes('.vercel.app') || 
-    origin.includes('localhost') || 
-    origin.includes('127.0.0.1') ||
-    origin === process.env.CORS_ORIGIN
-  )) {
+  // Set permissive CORS headers
+  if (origin) {
     res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    
-    console.log('✅ Manual CORS headers set for:', origin);
+  } else {
+    res.header('Access-Control-Allow-Origin', '*');
   }
+  
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   
   // Handle preflight OPTIONS requests
   if (req.method === 'OPTIONS') {
-    console.log('✅ Handling OPTIONS preflight request');
+    console.log('✅ Handling OPTIONS preflight for:', origin);
     res.status(200).end();
     return;
   }
@@ -109,6 +69,16 @@ app.use('/api/meals', require('./routes/meals'));
 app.use('/api/purchases', require('./routes/purchases'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/advance-payments', require('./routes/advancePayments'));
+
+// Test CORS endpoint
+app.get('/api/test-cors', (req, res) => {
+  console.log('🧪 CORS test endpoint hit from:', req.headers.origin);
+  res.json({
+    message: 'CORS is working!',
+    origin: req.headers.origin,
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
