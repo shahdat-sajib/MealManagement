@@ -1,9 +1,19 @@
 import axios from 'axios';
 
-const API_BASE = process.env.REACT_APP_API_URL || '/api';
+// Determine the API base URL correctly
+const getApiBase = () => {
+  if (process.env.REACT_APP_API_URL) {
+    // Production: use the full backend URL + /api
+    return `${process.env.REACT_APP_API_URL}/api`;
+  } else {
+    // Development: use relative path
+    return '/api';
+  }
+};
 
-// Configure axios defaults
-axios.defaults.baseURL = process.env.REACT_APP_API_URL || '';
+const API_BASE = getApiBase();
+
+// Configure axios defaults - don't set baseURL when using full URLs
 axios.defaults.headers.common['Content-Type'] = 'application/json';
 
 // Add request interceptor to include auth token
@@ -23,9 +33,12 @@ axios.interceptors.request.use(
 // Generic API call function
 const apiCall = async (method, url, data = null) => {
   try {
+    const fullUrl = `${API_BASE}${url}`;
+    console.log('🔗 API Call:', method, fullUrl); // Debug log
+    
     const config = {
       method,
-      url: `${API_BASE}${url}`,
+      url: fullUrl,
     };
     
     if (data) {
@@ -35,6 +48,7 @@ const apiCall = async (method, url, data = null) => {
     const response = await axios(config);
     return { success: true, data: response.data };
   } catch (error) {
+    console.error('❌ API Error:', error.response?.status, error.response?.data);
     return {
       success: false,
       error: error.response?.data?.message || 'An error occurred'
