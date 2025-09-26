@@ -1,0 +1,8 @@
+# Railway requires this file to be in the root for monorepo deployment
+# This tells Railway to only deploy the server directory
+
+[build]
+cmd = "cd server && npm install"
+
+[deploy]
+cmd = "cd server && npm start"
