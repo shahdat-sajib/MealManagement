@@ -10,14 +10,48 @@ const app = express();
 
 // Middleware
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // List of allowed origins
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001', 
+      'https://meal-management-h65e4nzeh-shahdats-projects.vercel.app',
+      process.env.CORS_ORIGIN
+    ].filter(Boolean);
+    
+    // Check if origin is allowed or if it's a Vercel deployment URL
+    const isAllowed = allowedOrigins.includes(origin) || 
+                     origin.includes('vercel.app') ||
+                     origin.includes('meal-management');
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 };
 
+// Add CORS debugging
+app.use((req, res, next) => {
+  console.log('Request from origin:', req.headers.origin);
+  console.log('Request method:', req.method);
+  console.log('Request URL:', req.url);
+  next();
+});
+
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// Handle preflight OPTIONS requests
+app.options('*', cors(corsOptions));
 
 // Database connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/meal-management', {
