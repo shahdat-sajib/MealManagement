@@ -8,50 +8,92 @@ dotenv.config();
 
 const app = express();
 
-// Middleware
+// Middleware - More permissive CORS for Vercel deployments
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+    console.log('🌐 CORS Check - Origin:', origin);
     
-    // List of allowed origins
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:3001', 
-      'https://meal-management-h65e4nzeh-shahdats-projects.vercel.app',
-      process.env.CORS_ORIGIN
-    ].filter(Boolean);
-    
-    // Check if origin is allowed or if it's a Vercel deployment URL
-    const isAllowed = allowedOrigins.includes(origin) || 
-                     origin.includes('vercel.app') ||
-                     origin.includes('meal-management');
-    
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      console.log('CORS blocked origin:', origin);
-      callback(new Error('Not allowed by CORS'));
+    // Allow requests with no origin
+    if (!origin) {
+      console.log('✅ No origin - allowing');
+      return callback(null, true);
     }
+    
+    // In development, allow localhost
+    if (process.env.NODE_ENV !== 'production') {
+      if (origin.includes('localhost')) {
+        console.log('✅ Development localhost - allowing');
+        return callback(null, true);
+      }
+    }
+    
+    // Allow all Vercel deployments for your account
+    if (origin.includes('.vercel.app') && origin.includes('shahdats-projects')) {
+      console.log('✅ Vercel deployment - allowing');
+      return callback(null, true);
+    }
+    
+    // Allow specific environment variable
+    if (process.env.CORS_ORIGIN && origin === process.env.CORS_ORIGIN) {
+      console.log('✅ Environment CORS_ORIGIN - allowing');
+      return callback(null, true);
+    }
+    
+    // For development and testing, be more permissive
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      console.log('✅ Local development - allowing');
+      return callback(null, true);
+    }
+    
+    console.log('❌ CORS blocked origin:', origin);
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  preflightContinue: false,
+  optionsSuccessStatus: 200
 };
 
 // Add CORS debugging
 app.use((req, res, next) => {
-  console.log('Request from origin:', req.headers.origin);
-  console.log('Request method:', req.method);
-  console.log('Request URL:', req.url);
+  console.log('📥 Request from origin:', req.headers.origin);
+  console.log('📋 Request method:', req.method);
+  console.log('🎯 Request URL:', req.url);
+  next();
+});
+
+// Manual CORS headers for maximum compatibility
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  // Allow Vercel deployments
+  if (origin && (
+    origin.includes('.vercel.app') || 
+    origin.includes('localhost') || 
+    origin.includes('127.0.0.1') ||
+    origin === process.env.CORS_ORIGIN
+  )) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    
+    console.log('✅ Manual CORS headers set for:', origin);
+  }
+  
+  // Handle preflight OPTIONS requests
+  if (req.method === 'OPTIONS') {
+    console.log('✅ Handling OPTIONS preflight request');
+    res.status(200).end();
+    return;
+  }
+  
   next();
 });
 
 app.use(cors(corsOptions));
 app.use(express.json());
-
-// Handle preflight OPTIONS requests
-app.options('*', cors(corsOptions));
 
 // Database connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/meal-management', {
