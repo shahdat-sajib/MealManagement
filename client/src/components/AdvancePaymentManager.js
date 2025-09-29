@@ -119,6 +119,7 @@ const AdvancePaymentManager = () => {
         notes: `Balance cleared by admin - Previous balance: $${(user.advanceBalance || 0).toFixed(2)}`
       };
 
+      console.log('🔗 Clearing balance with data:', deductionData);
       const response = await advancePaymentsApi.addPayment(deductionData);
 
       if (response.success) {
@@ -154,6 +155,7 @@ const AdvancePaymentManager = () => {
         notes: `Deduction by admin: $${amount.toFixed(2)}`
       };
 
+      console.log('🔗 Deducting amount with data:', deductionData);
       const response = await advancePaymentsApi.addPayment(deductionData);
 
       if (response.success) {
