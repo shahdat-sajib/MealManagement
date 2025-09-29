@@ -7,6 +7,7 @@ import { useAuth } from './context/AuthContext';
 // Components
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
+import Footer from './components/Footer';
 
 // Pages
 import Home from './pages/Home';
@@ -30,9 +31,9 @@ function AppContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       <Navbar />
-      <main className="container mx-auto px-4 py-8">
+      <main className="flex-1 container mx-auto px-4 py-8">
         <Routes>
           <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Home />} />
           <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
@@ -71,6 +72,7 @@ function AppContent() {
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>
+      <Footer />
       <Toaster 
         position="top-right"
         toastOptions={{
