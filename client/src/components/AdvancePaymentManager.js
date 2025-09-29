@@ -24,7 +24,8 @@ const AdvancePaymentManager = () => {
       
       if (response.success) {
         console.log('✅ Users fetched successfully:', response.data.length, 'users');
-        setUsers(response.data.filter(user => user.role !== 'admin'));
+        // Include all users (both regular users and admin users)
+        setUsers(response.data);
       } else {
         console.error('❌ Failed to fetch users:', response.error);
         toast.error('Failed to load users');
@@ -123,7 +124,7 @@ const AdvancePaymentManager = () => {
               <option value="">Choose user...</option>
               {users.map(user => (
                 <option key={user._id} value={user._id}>
-                  {user.name} - ${(user.advanceBalance || 0).toFixed(2)}
+                  {user.name} ({user.role}) - ${(user.advanceBalance || 0).toFixed(2)}
                 </option>
               ))}
             </select>
@@ -187,6 +188,9 @@ const AdvancePaymentManager = () => {
                   Email
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Role
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Advance Balance
                 </th>
               </tr>
@@ -199,6 +203,15 @@ const AdvancePaymentManager = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-500">{user.email}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      user.role === 'admin' 
+                        ? 'bg-purple-100 text-purple-800' 
+                        : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {user.role}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
