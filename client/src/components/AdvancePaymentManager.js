@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { usersApi, advancePaymentsApi } from '../services/api';
 
@@ -11,6 +11,13 @@ const AdvancePaymentManager = () => {
     amount: '',
     notes: ''
   });
+  const [deductionModal, setDeductionModal] = useState({
+    show: false,
+    userId: '',
+    userName: '',
+    currentBalance: 0,
+    amount: ''
+  });
 
   useEffect(() => {
     fetchUsers();
@@ -19,36 +26,26 @@ const AdvancePaymentManager = () => {
 
   const fetchUsers = async () => {
     try {
-      console.log('🔗 Fetching users for advance payment dropdown');
       const response = await usersApi.getUsers();
-      
       if (response.success) {
-        console.log('✅ Users fetched successfully:', response.data.length, 'users');
-        // Include all users (both regular users and admin users)
         setUsers(response.data);
       } else {
-        console.error('❌ Failed to fetch users:', response.error);
         toast.error('Failed to load users');
       }
     } catch (error) {
-      console.error('❌ Error fetching users:', error);
+      console.error('Error fetching users:', error);
       toast.error('Error loading users');
     }
   };
 
   const fetchPayments = async () => {
     try {
-      console.log('🔗 Fetching advance payments');
       const response = await advancePaymentsApi.getPayments();
-      
       if (response.success) {
-        console.log('✅ Payments fetched successfully:', response.data.length, 'payments');
         setPayments(response.data);
-      } else {
-        console.error('❌ Failed to fetch payments:', response.error);
       }
     } catch (error) {
-      console.error('❌ Error fetching payments:', error);
+      console.error('Error fetching payments:', error);
     }
   };
 
@@ -63,14 +60,13 @@ const AdvancePaymentManager = () => {
     setLoading(true);
     
     try {
-      console.log('🔗 Adding advance payment:', formData);
       const response = await advancePaymentsApi.addPayment(formData);
 
       if (response.success) {
         toast.success('Advance payment added successfully');
         setFormData({ userId: '', amount: '', notes: '' });
         fetchPayments();
-        fetchUsers(); // Refresh to show updated balances
+        fetchUsers();
       } else {
         toast.error(response.error || 'Failed to add advance payment');
       }
@@ -86,7 +82,6 @@ const AdvancePaymentManager = () => {
     if (!window.confirm('Are you sure you want to delete this payment?')) return;
 
     try {
-      console.log('🔗 Deleting advance payment:', paymentId);
       const response = await advancePaymentsApi.deletePayment(paymentId);
 
       if (response.success) {
@@ -102,12 +97,84 @@ const AdvancePaymentManager = () => {
     }
   };
 
+  const handleDeductAmount = (user) => {
+    setDeductionModal({
+      show: true,
+      userId: user._id,
+      userName: user.name,
+      currentBalance: user.advanceBalance || 0,
+      amount: ''
+    });
+  };
+
+  const handleClearBalance = async (user) => {
+    const confirmMessage = `Are you sure you want to clear the advance balance for ${user.name}?\nCurrent balance: $${(user.advanceBalance || 0).toFixed(2)}\nThis action cannot be undone.`;
+    
+    if (!window.confirm(confirmMessage)) return;
+
+    try {
+      const deductionData = {
+        userId: user._id,
+        amount: -(user.advanceBalance || 0),
+        notes: `Balance cleared by admin - Previous balance: $${(user.advanceBalance || 0).toFixed(2)}`
+      };
+
+      const response = await advancePaymentsApi.addPayment(deductionData);
+
+      if (response.success) {
+        toast.success(`Balance cleared for ${user.name}`);
+        fetchUsers();
+        fetchPayments();
+      } else {
+        toast.error(response.error || 'Failed to clear balance');
+      }
+    } catch (error) {
+      console.error('Error clearing balance:', error);
+      toast.error('Failed to clear balance');
+    }
+  };
+
+  const handleDeductSubmit = async () => {
+    const amount = parseFloat(deductionModal.amount);
+    
+    if (!amount || amount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    if (amount > deductionModal.currentBalance) {
+      toast.error('Deduction amount cannot exceed current balance');
+      return;
+    }
+
+    try {
+      const deductionData = {
+        userId: deductionModal.userId,
+        amount: -amount,
+        notes: `Deduction by admin: $${amount.toFixed(2)}`
+      };
+
+      const response = await advancePaymentsApi.addPayment(deductionData);
+
+      if (response.success) {
+        toast.success(`$${amount.toFixed(2)} deducted from ${deductionModal.userName}'s balance`);
+        setDeductionModal({ show: false, userId: '', userName: '', currentBalance: 0, amount: '' });
+        fetchUsers();
+        fetchPayments();
+      } else {
+        toast.error(response.error || 'Failed to deduct amount');
+      }
+    } catch (error) {
+      console.error('Error deducting amount:', error);
+      toast.error('Failed to deduct amount');
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto">
-      {/* Add Payment Form */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">
-          💰 Add Advance Payment
+          Add Advance Payment
         </h3>
         
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -171,7 +238,6 @@ const AdvancePaymentManager = () => {
         </form>
       </div>
 
-      {/* User Balance Overview */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">
           👥 User Advance Balances
@@ -192,6 +258,9 @@ const AdvancePaymentManager = () => {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Advance Balance
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -222,6 +291,28 @@ const AdvancePaymentManager = () => {
                       ${(user.advanceBalance || 0).toFixed(2)}
                     </span>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex space-x-2">
+                      {(user.advanceBalance || 0) > 0 && (
+                        <>
+                          <button
+                            onClick={() => handleDeductAmount(user)}
+                            className="text-orange-600 hover:text-orange-900 text-xs"
+                            title="Deduct Amount"
+                          >
+                            Deduct
+                          </button>
+                          <button
+                            onClick={() => handleClearBalance(user)}
+                            className="text-red-600 hover:text-red-900 text-xs"
+                            title="Clear Balance"
+                          >
+                            Clear
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -229,10 +320,53 @@ const AdvancePaymentManager = () => {
         </div>
       </div>
 
-      {/* Payment History */}
+      {deductionModal.show && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3 text-center">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">
+                Deduct Amount
+              </h3>
+              <div className="mt-2 px-7 py-3">
+                <p className="text-sm text-gray-500 mb-4">
+                  Deduct from <strong>{deductionModal.userName}</strong>'s advance balance
+                </p>
+                <p className="text-sm text-gray-600 mb-4">
+                  Current Balance: <strong>${deductionModal.currentBalance.toFixed(2)}</strong>
+                </p>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max={deductionModal.currentBalance}
+                  value={deductionModal.amount}
+                  onChange={(e) => setDeductionModal({ ...deductionModal, amount: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Amount to deduct"
+                />
+              </div>
+              <div className="items-center px-4 py-3">
+                <button
+                  onClick={handleDeductSubmit}
+                  className="px-4 py-2 bg-orange-500 text-white text-base font-medium rounded-md w-24 mr-2 hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                >
+                  Deduct
+                </button>
+                <button
+                  onClick={() => setDeductionModal({ show: false, userId: '', userName: '', currentBalance: 0, amount: '' })}
+                  className="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md w-24 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow-md p-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">
-          📋 Payment History
+          Payment History
         </h3>
         
         <div className="overflow-x-auto">
@@ -266,21 +400,19 @@ const AdvancePaymentManager = () => {
                     <div className="text-sm text-gray-900">
                       {new Date(payment.date).toLocaleDateString()}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {new Date(payment.date).toLocaleTimeString()}
-                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">
                       {payment.user?.name}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {payment.user?.email}
-                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                      +${payment.amount.toFixed(2)}
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      payment.amount >= 0 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {payment.amount >= 0 ? '+' : ''}${payment.amount.toFixed(2)}
                     </span>
                   </td>
                   <td className="px-6 py-4">
@@ -297,6 +429,7 @@ const AdvancePaymentManager = () => {
                     <button
                       onClick={() => handleDelete(payment._id)}
                       className="text-red-600 hover:text-red-900"
+                      title="Delete this payment record"
                     >
                       Delete
                     </button>
