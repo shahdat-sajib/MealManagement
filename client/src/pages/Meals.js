@@ -138,7 +138,16 @@ const Meals = () => {
       fetchMeals();
       fetchCalendarData();
     } else {
-      toast.error(result.error);
+      console.log('❌ Full error response:', result);
+      
+      // Check if there are detailed validation errors
+      if (result.error && typeof result.error === 'object' && result.error.errors) {
+        const errorMessages = result.error.errors.map(err => err.msg || err.message).join(', ');
+        toast.error(`Validation Error: ${errorMessages}`);
+        console.log('❌ Validation errors:', result.error.errors);
+      } else {
+        toast.error(result.error || 'Failed to add meal');
+      }
     }
   };
 
