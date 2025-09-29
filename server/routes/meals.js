@@ -78,9 +78,16 @@ router.post('/', [
   body('userId').optional().isMongoId().withMessage('Please provide a valid user ID')
 ], async (req, res) => {
   try {
+    console.log('🔗 Add meal request body:', req.body);
+    console.log('🔗 User making request:', { id: req.user._id, role: req.user.role, name: req.user.name });
+    
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      console.log('❌ Validation errors:', errors.array());
+      return res.status(400).json({ 
+        message: 'Validation failed',
+        errors: errors.array() 
+      });
     }
 
     const { date, description, mealType, userId } = req.body;
@@ -94,6 +101,7 @@ router.post('/', [
     if (req.user.role !== 'admin') {
       // Check if trying to add meal for past dates
       if (moment(mealDate).isBefore(currentDate, 'day')) {
+        console.log('❌ Cannot add meal for past date:', { mealDate, currentDate });
         return res.status(400).json({ 
           message: 'Cannot add meals for past dates' 
         });
@@ -102,6 +110,7 @@ router.post('/', [
       // Check if trying to schedule meal more than 15 days in advance
       const maxAdvanceDate = moment().add(15, 'days').startOf('day').toDate();
       if (moment(mealDate).isAfter(maxAdvanceDate)) {
+        console.log('❌ Cannot schedule meal too far in advance:', { mealDate, maxAdvanceDate });
         return res.status(400).json({ 
           message: 'Cannot schedule meals more than 15 days in advance' 
         });
@@ -114,7 +123,10 @@ router.post('/', [
       date: mealDate
     });
 
+    console.log('🔍 Checking existing meal:', { targetUserId, mealDate, existingMeal: !!existingMeal });
+
     if (existingMeal) {
+      console.log('❌ Meal already exists for date:', mealDate);
       return res.status(400).json({ 
         message: 'Meal already exists for this date' 
       });

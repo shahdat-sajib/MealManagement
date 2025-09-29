@@ -99,6 +99,9 @@ const Meals = () => {
       mealData.userId = formData.userId;
     }
 
+    console.log('🔗 Frontend sending meal data:', mealData);
+    console.log('🔗 User context:', { role: user?.role, id: user?.id });
+    
     const result = await mealsApi.addMeal(mealData);
     
     if (result.success) {
