@@ -26,8 +26,7 @@ const userSchema = new mongoose.Schema({
   },
   advanceBalance: {
     type: Number,
-    default: 0,
-    min: 0
+    default: 0
   },
   createdAt: {
     type: Date,

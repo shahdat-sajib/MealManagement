@@ -50,7 +50,12 @@ router.post('/', adminAuth, async (req, res) => {
     await advancePayment.save();
 
     // Update user's advance balance (allow negative amounts for deductions)
-    user.advanceBalance = Math.max(0, user.advanceBalance + numericAmount);
+    const currentBalance = user.advanceBalance || 0;
+    const newBalance = Math.max(0, currentBalance + numericAmount);
+    user.advanceBalance = newBalance;
+    
+    console.log(`Balance update: ${user.name} - Current: $${currentBalance}, Change: $${numericAmount}, New: $${newBalance}`);
+    
     await user.save();
 
     // Populate the response
@@ -63,7 +68,15 @@ router.post('/', adminAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error adding advance payment:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    res.status(500).json({ 
+      message: 'Server error',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
