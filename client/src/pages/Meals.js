@@ -69,10 +69,32 @@ const Meals = () => {
 
   const handleDateChange = (date) => {
     setSelectedDate(date);
+    const selectedDateStr = formatDate(date);
+    
+    // Update form data with selected date
     setFormData(prev => ({
       ...prev,
-      date: formatDate(date)
+      date: selectedDateStr
     }));
+
+    // Check if user can add meal for this date
+    const validation = canAddMealForDate(selectedDateStr, user?.role === 'admin');
+    
+    // Check if meal already exists for this date
+    const dateKey = selectedDateStr;
+    const existingMeal = calendarData[dateKey];
+    
+    if (existingMeal) {
+      // If meal exists, show info message
+      toast.info(`Meal already exists for ${formatDateForDisplay(date)}: ${existingMeal.description}`);
+    } else if (validation.canAdd) {
+      // If no meal exists and date is valid, open the add form
+      setShowAddForm(true);
+      toast.success(`Ready to add meal for ${formatDateForDisplay(date)}`);
+    } else {
+      // If date is not valid, show validation message
+      toast.error(validation.reason);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -193,10 +215,19 @@ const Meals = () => {
     if (view === 'month') {
       const dateKey = formatDate(date);
       const mealData = calendarData[dateKey];
+      const validation = canAddMealForDate(dateKey, user?.role === 'admin');
+      
+      let classes = [];
       
       if (mealData) {
-        return 'has-meal';
+        classes.push('has-meal');
+      } else if (validation.canAdd) {
+        classes.push('can-add-meal');
+      } else {
+        classes.push('cannot-add-meal');
       }
+      
+      return classes.join(' ');
     }
     return null;
   };
@@ -273,7 +304,7 @@ const Meals = () => {
             />
           </div>
           <div className="mt-4 text-sm text-gray-600">
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-4 mb-3">
               <div className="flex items-center">
                 <div className="w-3 h-3 bg-success-500 rounded-full mr-2"></div>
                 <span>Confirmed Meal</span>
@@ -282,6 +313,10 @@ const Meals = () => {
                 <div className="w-3 h-3 bg-yellow-500 rounded-full mr-2"></div>
                 <span>Scheduled Meal</span>
               </div>
+            </div>
+            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-blue-800 font-medium mb-1">💡 Quick Add:</p>
+              <p className="text-blue-700">Click on any date to quickly add a meal for that day!</p>
             </div>
           </div>
         </div>

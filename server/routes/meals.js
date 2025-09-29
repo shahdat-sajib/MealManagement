@@ -73,7 +73,7 @@ router.get('/all', [auth, adminAuth], async (req, res) => {
 // Add a new meal for any user (admin) or current user
 router.post('/', [
   auth,
-  body('date').isISO8601().withMessage('Please provide a valid date'),
+  body('date').notEmpty().withMessage('Date is required'),
   body('description').optional().trim(),
   body('userId').optional().isMongoId().withMessage('Please provide a valid user ID')
 ], async (req, res) => {

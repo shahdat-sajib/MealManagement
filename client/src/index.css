@@ -64,4 +64,20 @@
   .meal-scheduled {
     @apply absolute top-1 right-1 w-2 h-2 bg-yellow-500 rounded-full;
   }
+  
+  .meal-calendar .react-calendar__tile.can-add-meal {
+    @apply cursor-pointer hover:bg-green-50 hover:border-green-200 border border-transparent transition-all duration-200;
+  }
+  
+  .meal-calendar .react-calendar__tile.can-add-meal:hover {
+    @apply transform scale-105 shadow-sm;
+  }
+  
+  .meal-calendar .react-calendar__tile.cannot-add-meal {
+    @apply opacity-60 cursor-not-allowed;
+  }
+  
+  .meal-calendar .react-calendar__tile.has-meal {
+    @apply cursor-pointer hover:bg-blue-50 hover:border-blue-200 border border-transparent transition-all duration-200;
+  }
 }
