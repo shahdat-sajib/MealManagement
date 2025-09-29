@@ -25,7 +25,12 @@ export const isPast = (date) => {
   return moment(date).isBefore(moment(), 'day');
 };
 
-export const canAddMealForDate = (date) => {
+export const canAddMealForDate = (date, isAdmin = false) => {
+  // Admin users can add meals for any date
+  if (isAdmin) {
+    return { canAdd: true, reason: 'Admin privileges - no date restrictions' };
+  }
+  
   const mealDate = moment(date);
   
   // Can't add meals for past dates
@@ -42,7 +47,12 @@ export const canAddMealForDate = (date) => {
   return { canAdd: true };
 };
 
-export const canEditMealForDate = (date) => {
+export const canEditMealForDate = (date, isAdmin = false) => {
+  // Admin users can edit meals for any date
+  if (isAdmin) {
+    return { canEdit: true, reason: 'Admin privileges - no date restrictions' };
+  }
+  
   const mealDate = moment(date);
   
   // Can't edit meals for past dates

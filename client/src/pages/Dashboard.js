@@ -107,7 +107,7 @@ const Dashboard = () => {
           <option value="week-1">Week 1 of Month</option>
           <option value="week-2">Week 2 of Month</option>
           <option value="week-3">Week 3 of Month</option>
-          <option value="week-4">Week 4 of Month</option>
+          <option value="week-4">Week 4+ of Month (includes remaining days)</option>
           <option value="current-month">Current Month</option>
         </select>
       </div>

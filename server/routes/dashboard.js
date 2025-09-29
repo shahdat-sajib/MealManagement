@@ -23,8 +23,17 @@ router.get('/', auth, async (req, res) => {
       // Get specific week of current month
       const weekNum = parseInt(week);
       const monthStart = moment().startOf('month');
+      const monthEnd = moment().endOf('month');
       const start = monthStart.clone().add((weekNum - 1) * 7, 'days').startOf('day');
-      const end = start.clone().add(6, 'days').endOf('day');
+      
+      let end;
+      if (weekNum === 4) {
+        // Week 4 includes all remaining days of the month (29, 30, 31)
+        end = monthEnd.clone().endOf('day');
+      } else {
+        end = start.clone().add(6, 'days').endOf('day');
+      }
+      
       dateFilter = { $gte: start.toDate(), $lte: end.toDate() };
     } else {
       // Default to current week
@@ -203,8 +212,17 @@ router.get('/admin', [auth, adminAuth], async (req, res) => {
       // Get specific week of current month
       const weekNum = parseInt(week);
       const monthStart = moment().startOf('month');
+      const monthEnd = moment().endOf('month');
       const start = monthStart.clone().add((weekNum - 1) * 7, 'days').startOf('day');
-      const end = start.clone().add(6, 'days').endOf('day');
+      
+      let end;
+      if (weekNum === 4) {
+        // Week 4 includes all remaining days of the month (29, 30, 31)
+        end = monthEnd.clone().endOf('day');
+      } else {
+        end = start.clone().add(6, 'days').endOf('day');
+      }
+      
       dateFilter = { $gte: start.toDate(), $lte: end.toDate() };
     } else {
       // Default to current week

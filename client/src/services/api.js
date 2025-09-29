@@ -64,7 +64,10 @@ export const mealsApi = {
   // Get all meals (admin only)
   getAllMeals: (params = {}) => apiCall('GET', `/meals/all?${new URLSearchParams(params)}`),
   
-  // Add new meal
+  // Get all users (admin only) - for meal assignment
+  getUsers: () => apiCall('GET', '/meals/users'),
+  
+  // Add new meal (can include userId for admin)
   addMeal: (mealData) => apiCall('POST', '/meals', mealData),
   
   // Update meal
@@ -110,6 +113,12 @@ export const dashboardApi = {
   getHistory: (params = {}) => apiCall('GET', `/dashboard/history?${new URLSearchParams(params)}`)
 };
 
+// Users API
+export const usersApi = {
+  // Get all users (admin only)
+  getUsers: () => apiCall('GET', '/auth/users')
+};
+
 // Advance Payments API
 export const advancePaymentsApi = {
   // Get all advance payments (admin only)
@@ -129,5 +138,6 @@ export default {
   meals: mealsApi,
   purchases: purchasesApi,
   dashboard: dashboardApi,
+  users: usersApi,
   advancePayments: advancePaymentsApi
 };

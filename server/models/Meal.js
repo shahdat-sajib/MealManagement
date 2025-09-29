@@ -23,6 +23,11 @@ const mealSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  addedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: false // Optional field to track who added the meal (for admin features)
+  },
   createdAt: {
     type: Date,
     default: Date.now

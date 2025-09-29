@@ -34,6 +34,18 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
+// Get all users (admin only) - for meal assignment
+router.get('/users', [auth, adminAuth], async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const users = await User.find({}).select('_id name email role').sort({ name: 1 });
+    res.json({ users });
+  } catch (error) {
+    console.error('Get users error:', error);
+    res.status(500).json({ message: 'Server error fetching users' });
+  }
+});
+
 // Get all meals (admin only)
 router.get('/all', [auth, adminAuth], async (req, res) => {
   try {
@@ -58,11 +70,12 @@ router.get('/all', [auth, adminAuth], async (req, res) => {
   }
 });
 
-// Add a new meal
+// Add a new meal for any user (admin) or current user
 router.post('/', [
   auth,
   body('date').isISO8601().withMessage('Please provide a valid date'),
-  body('description').optional().trim()
+  body('description').optional().trim(),
+  body('userId').optional().isMongoId().withMessage('Please provide a valid user ID')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -70,28 +83,34 @@ router.post('/', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { date, description, mealType } = req.body;
+    const { date, description, mealType, userId } = req.body;
     const mealDate = moment(date).startOf('day').toDate();
     const currentDate = moment().startOf('day').toDate();
+    
+    // Determine target user - admin can add for any user, regular users for themselves
+    const targetUserId = req.user.role === 'admin' && userId ? userId : req.user._id;
+    
+    // Admin users can bypass date restrictions
+    if (req.user.role !== 'admin') {
+      // Check if trying to add meal for past dates
+      if (moment(mealDate).isBefore(currentDate, 'day')) {
+        return res.status(400).json({ 
+          message: 'Cannot add meals for past dates' 
+        });
+      }
 
-    // Check if trying to add meal for past dates
-    if (moment(mealDate).isBefore(currentDate, 'day')) {
-      return res.status(400).json({ 
-        message: 'Cannot add meals for past dates' 
-      });
-    }
-
-    // Check if trying to schedule meal more than 15 days in advance
-    const maxAdvanceDate = moment().add(15, 'days').startOf('day').toDate();
-    if (moment(mealDate).isAfter(maxAdvanceDate)) {
-      return res.status(400).json({ 
-        message: 'Cannot schedule meals more than 15 days in advance' 
-      });
+      // Check if trying to schedule meal more than 15 days in advance
+      const maxAdvanceDate = moment().add(15, 'days').startOf('day').toDate();
+      if (moment(mealDate).isAfter(maxAdvanceDate)) {
+        return res.status(400).json({ 
+          message: 'Cannot schedule meals more than 15 days in advance' 
+        });
+      }
     }
 
     // Check if meal already exists for this date
     const existingMeal = await Meal.findOne({
-      user: req.user._id,
+      user: targetUserId,
       date: mealDate
     });
 
@@ -102,11 +121,12 @@ router.post('/', [
     }
 
     const meal = new Meal({
-      user: req.user._id,
+      user: targetUserId,
       date: mealDate,
       description: description || `${mealType || 'breakfast'} meal`,
       mealType: mealType || 'breakfast',
-      isScheduled: moment(mealDate).isAfter(currentDate)
+      isScheduled: moment(mealDate).isAfter(currentDate),
+      addedBy: req.user._id // Track who added the meal
     });
 
     await meal.save();
@@ -141,16 +161,16 @@ router.put('/:id', [
       return res.status(404).json({ message: 'Meal not found' });
     }
 
-    // Check if user owns this meal
-    if (meal.user.toString() !== req.user._id.toString()) {
+    // Check if user owns this meal or is admin
+    if (meal.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Access denied' });
     }
 
     const mealDate = moment(meal.date).startOf('day');
     const currentDate = moment().startOf('day');
 
-    // Check if trying to update meal for past dates
-    if (mealDate.isBefore(currentDate, 'day')) {
+    // Admin can edit any meal, regular users have date restrictions
+    if (req.user.role !== 'admin' && mealDate.isBefore(currentDate, 'day')) {
       return res.status(400).json({ 
         message: 'Cannot edit meals for past dates' 
       });
@@ -184,16 +204,16 @@ router.delete('/:id', auth, async (req, res) => {
       return res.status(404).json({ message: 'Meal not found' });
     }
 
-    // Check if user owns this meal
-    if (meal.user.toString() !== req.user._id.toString()) {
+    // Check if user owns this meal or is admin
+    if (meal.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Access denied' });
     }
 
     const mealDate = moment(meal.date).startOf('day');
     const currentDate = moment().startOf('day');
 
-    // Check if trying to delete meal for past dates
-    if (mealDate.isBefore(currentDate, 'day')) {
+    // Admin can delete any meal, regular users have date restrictions
+    if (req.user.role !== 'admin' && mealDate.isBefore(currentDate, 'day')) {
       return res.status(400).json({ 
         message: 'Cannot delete meals for past dates' 
       });

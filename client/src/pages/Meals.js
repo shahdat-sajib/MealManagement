@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import Calendar from 'react-calendar';
 import { mealsApi } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { formatDate, formatDateForDisplay, canAddMealForDate, canEditMealForDate } from '../utils/helpers';
 import toast from 'react-hot-toast';
 import 'react-calendar/dist/Calendar.css';
 
 const Meals = () => {
+  const { user } = useAuth();
   const [meals, setMeals] = useState([]);
+  const [users, setUsers] = useState([]);
   const [calendarData, setCalendarData] = useState({});
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showAddForm, setShowAddForm] = useState(false);
@@ -16,13 +19,17 @@ const Meals = () => {
   const [formData, setFormData] = useState({
     date: formatDate(new Date()),
     description: '',
-    mealType: 'breakfast'
+    mealType: 'breakfast',
+    userId: ''
   });
 
   useEffect(() => {
     fetchMeals();
     fetchCalendarData();
-  }, []);
+    if (user?.role === 'admin') {
+      fetchUsers();
+    }
+  }, [user]);
 
   useEffect(() => {
     fetchCalendarData();
@@ -50,6 +57,16 @@ const Meals = () => {
     }
   };
 
+  const fetchUsers = async () => {
+    const result = await mealsApi.getUsers();
+    
+    if (result.success) {
+      setUsers(result.data.users);
+    } else {
+      toast.error('Failed to fetch users');
+    }
+  };
+
   const handleDateChange = (date) => {
     setSelectedDate(date);
     setFormData(prev => ({
@@ -69,13 +86,20 @@ const Meals = () => {
   const handleAddMeal = async (e) => {
     e.preventDefault();
     
-    const validation = canAddMealForDate(formData.date);
-    if (!validation.canAdd) {
+    // Check date restrictions (admin users can bypass)
+    const validation = canAddMealForDate(formData.date, user?.role === 'admin');
+    if (!validation.canAdd && user?.role !== 'admin') {
       toast.error(validation.reason);
       return;
     }
 
-    const result = await mealsApi.addMeal(formData);
+    // Prepare meal data
+    const mealData = { ...formData };
+    if (user?.role === 'admin' && formData.userId) {
+      mealData.userId = formData.userId;
+    }
+
+    const result = await mealsApi.addMeal(mealData);
     
     if (result.success) {
       toast.success('Meal added successfully!');
@@ -83,7 +107,8 @@ const Meals = () => {
       setFormData({
         date: formatDate(new Date()),
         description: '',
-        mealType: 'breakfast'
+        mealType: 'breakfast',
+        userId: ''
       });
       fetchMeals();
       fetchCalendarData();
@@ -321,6 +346,34 @@ const Meals = () => {
                   required
                 />
               </div>
+              
+              {/* User Selection - Admin Only */}
+              {user?.role === 'admin' && (
+                <div>
+                  <label htmlFor="userId" className="block text-sm font-medium text-gray-700">
+                    Select User <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    id="userId"
+                    name="userId"
+                    value={formData.userId}
+                    onChange={handleInputChange}
+                    className="mt-1 input"
+                    required
+                  >
+                    <option value="">Choose a user...</option>
+                    {users.map((userItem) => (
+                      <option key={userItem._id} value={userItem._id}>
+                        {userItem.name} ({userItem.email})
+                        {userItem.role === 'admin' && ' - Admin'}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-sm text-gray-500 mt-1">
+                    As an admin, you can add meals for any user at any time.
+                  </p>
+                </div>
+              )}
               
               <div>
                 <label htmlFor="description" className="block text-sm font-medium text-gray-700">

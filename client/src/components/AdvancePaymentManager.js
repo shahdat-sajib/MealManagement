@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
+import { usersApi, advancePaymentsApi } from '../services/api';
 
 const AdvancePaymentManager = () => {
   const [users, setUsers] = useState([]);
@@ -18,37 +19,35 @@ const AdvancePaymentManager = () => {
 
   const fetchUsers = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/auth/users', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      console.log('🔗 Fetching users for advance payment dropdown');
+      const response = await usersApi.getUsers();
       
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data.filter(user => user.role !== 'admin'));
+      if (response.success) {
+        console.log('✅ Users fetched successfully:', response.data.length, 'users');
+        setUsers(response.data.filter(user => user.role !== 'admin'));
+      } else {
+        console.error('❌ Failed to fetch users:', response.error);
+        toast.error('Failed to load users');
       }
     } catch (error) {
-      console.error('Error fetching users:', error);
+      console.error('❌ Error fetching users:', error);
+      toast.error('Error loading users');
     }
   };
 
   const fetchPayments = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/advance-payments', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      console.log('🔗 Fetching advance payments');
+      const response = await advancePaymentsApi.getPayments();
       
-      if (response.ok) {
-        const data = await response.json();
-        setPayments(data);
+      if (response.success) {
+        console.log('✅ Payments fetched successfully:', response.data.length, 'payments');
+        setPayments(response.data);
+      } else {
+        console.error('❌ Failed to fetch payments:', response.error);
       }
     } catch (error) {
-      console.error('Error fetching payments:', error);
+      console.error('❌ Error fetching payments:', error);
     }
   };
 
@@ -63,24 +62,16 @@ const AdvancePaymentManager = () => {
     setLoading(true);
     
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/advance-payments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(formData)
-      });
+      console.log('🔗 Adding advance payment:', formData);
+      const response = await advancePaymentsApi.addPayment(formData);
 
-      if (response.ok) {
+      if (response.success) {
         toast.success('Advance payment added successfully');
         setFormData({ userId: '', amount: '', notes: '' });
         fetchPayments();
         fetchUsers(); // Refresh to show updated balances
       } else {
-        const error = await response.json();
-        toast.error(error.message || 'Failed to add advance payment');
+        toast.error(response.error || 'Failed to add advance payment');
       }
     } catch (error) {
       console.error('Error adding payment:', error);
@@ -94,20 +85,15 @@ const AdvancePaymentManager = () => {
     if (!window.confirm('Are you sure you want to delete this payment?')) return;
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/advance-payments/${paymentId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      console.log('🔗 Deleting advance payment:', paymentId);
+      const response = await advancePaymentsApi.deletePayment(paymentId);
 
-      if (response.ok) {
+      if (response.success) {
         toast.success('Payment deleted successfully');
         fetchPayments();
         fetchUsers();
       } else {
-        toast.error('Failed to delete payment');
+        toast.error(response.error || 'Failed to delete payment');
       }
     } catch (error) {
       console.error('Error deleting payment:', error);
