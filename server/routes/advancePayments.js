@@ -24,8 +24,13 @@ router.post('/', adminAuth, async (req, res) => {
   try {
     const { userId, amount, notes } = req.body;
     
-    if (!userId || !amount || amount <= 0) {
+    if (!userId || amount === undefined || amount === null || amount === '') {
       return res.status(400).json({ message: 'User ID and valid amount are required' });
+    }
+    
+    const numericAmount = parseFloat(amount);
+    if (isNaN(numericAmount)) {
+      return res.status(400).json({ message: 'Amount must be a valid number' });
     }
 
     // Check if user exists
@@ -37,15 +42,15 @@ router.post('/', adminAuth, async (req, res) => {
     // Create advance payment record
     const advancePayment = new AdvancePayment({
       user: userId,
-      amount: parseFloat(amount),
+      amount: numericAmount,
       notes: notes || '',
       addedBy: req.user.id
     });
 
     await advancePayment.save();
 
-    // Update user's advance balance
-    user.advanceBalance += parseFloat(amount);
+    // Update user's advance balance (allow negative amounts for deductions)
+    user.advanceBalance = Math.max(0, user.advanceBalance + numericAmount);
     await user.save();
 
     // Populate the response
