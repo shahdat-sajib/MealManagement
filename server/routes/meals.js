@@ -75,7 +75,12 @@ router.post('/', [
   auth,
   body('date').notEmpty().withMessage('Date is required'),
   body('description').optional().trim(),
-  body('userId').optional().isMongoId().withMessage('Please provide a valid user ID')
+  body('userId').optional().custom((value) => {
+    if (value && !value.match(/^[0-9a-fA-F]{24}$/)) {
+      throw new Error('Please provide a valid user ID');
+    }
+    return true;
+  })
 ], async (req, res) => {
   try {
     console.log('🔗 Add meal request body:', req.body);

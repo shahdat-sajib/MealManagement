@@ -117,8 +117,14 @@ const Meals = () => {
 
     // Prepare meal data
     const mealData = { ...formData };
+    
+    // Set userId properly based on user role
     if (user?.role === 'admin' && formData.userId) {
+      // Admin selected a specific user
       mealData.userId = formData.userId;
+    } else {
+      // Regular user or admin without selection - use current user's ID
+      mealData.userId = user?.id || user?._id;
     }
 
     console.log('🔗 Frontend sending meal data:', mealData);
