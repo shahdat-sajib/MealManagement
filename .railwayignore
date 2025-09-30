@@ -1,9 +1,0 @@
-# Railway Ignore - Only deploy server
-client/
-.env.example
-README.md
-DEPLOYMENT_GUIDE.md
-setup-env.sh
-.git/
-.gitignore
-*.md

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { dashboardApi } from '../services/api';
+import { dashboardApi, mealsApi, purchasesApi } from '../services/api';
 import { formatCurrency, formatDateForDisplay, generateColors } from '../utils/helpers';
 import AdvancePaymentManager from '../components/AdvancePaymentManager';
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
 import toast from 'react-hot-toast';
 
 const AdminDashboard = () => {
@@ -10,10 +12,23 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState('current-week');
   const [activeTab, setActiveTab] = useState('dashboard');
+  
+  // Date-wise reports state
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [reportLoading, setReportLoading] = useState(false);
+  const [mealReports, setMealReports] = useState([]);
+  const [purchaseReports, setPurchaseReports] = useState([]);
+  const [reportStats, setReportStats] = useState(null);
 
   useEffect(() => {
     fetchAdminData();
   }, [dateRange]);
+
+  useEffect(() => {
+    if (activeTab === 'meal-reports' || activeTab === 'purchase-reports') {
+      fetchDateWiseReports();
+    }
+  }, [selectedDate, activeTab]);
 
   const fetchAdminData = async () => {
     const params = getDateParams();
@@ -64,6 +79,122 @@ const AdminDashboard = () => {
     }
     
     return params;
+  };
+
+  const fetchDateWiseReports = async () => {
+    setReportLoading(true);
+    try {
+      const dateStr = selectedDate.toISOString().split('T')[0];
+      
+      if (activeTab === 'meal-reports') {
+        const result = await getUsersWithMeals(dateStr);
+        setMealReports(result.users || []);
+        setReportStats(result.stats || null);
+      } else if (activeTab === 'purchase-reports') {
+        const result = await getUsersWithPurchases(dateStr);
+        setPurchaseReports(result.users || []);
+        setReportStats(result.stats || null);
+      }
+    } catch (error) {
+      console.error('Error fetching date-wise reports:', error);
+      toast.error('Failed to fetch reports');
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const getUsersWithMeals = async (date) => {
+    try {
+      // Fetch all users
+      const usersResponse = await dashboardApi.getAdminDashboard({ startDate: date, endDate: date });
+      const allUsers = usersResponse.data?.userBreakdown || [];
+      
+      // Fetch meals for the specific date
+      const mealsResponse = await mealsApi.getUserMeals({ date });
+      const mealsData = mealsResponse.data || [];
+      
+      // Create a map of users who ordered meals
+      const usersWithMeals = new Map();
+      mealsData.forEach(meal => {
+        if (meal.user) {
+          usersWithMeals.set(meal.user._id, {
+            ...meal.user,
+            meals: [...(usersWithMeals.get(meal.user._id)?.meals || []), meal]
+          });
+        }
+      });
+      
+      // Prepare final data
+      const users = allUsers.map(userBreakdown => {
+        const userMeals = usersWithMeals.get(userBreakdown.user.id);
+        return {
+          ...userBreakdown.user,
+          hasOrdered: !!userMeals,
+          meals: userMeals?.meals || [],
+          totalAmount: userMeals?.meals.reduce((sum, meal) => sum + (meal.amount || 0), 0) || 0
+        };
+      });
+      
+      const stats = {
+        totalUsers: users.length,
+        usersWithOrders: users.filter(u => u.hasOrdered).length,
+        usersWithoutOrders: users.filter(u => !u.hasOrdered).length,
+        totalOrders: mealsData.length,
+        totalAmount: users.reduce((sum, user) => sum + user.totalAmount, 0)
+      };
+      
+      return { users, stats };
+    } catch (error) {
+      console.error('Error fetching users with meals:', error);
+      throw error;
+    }
+  };
+
+  const getUsersWithPurchases = async (date) => {
+    try {
+      // Fetch all users
+      const usersResponse = await dashboardApi.getAdminDashboard({ startDate: date, endDate: date });
+      const allUsers = usersResponse.data?.userBreakdown || [];
+      
+      // Fetch purchases for the specific date
+      const purchasesResponse = await purchasesApi.getUserPurchases({ date });
+      const purchasesData = purchasesResponse.data || [];
+      
+      // Create a map of users who made purchases
+      const usersWithPurchases = new Map();
+      purchasesData.forEach(purchase => {
+        if (purchase.user) {
+          usersWithPurchases.set(purchase.user._id, {
+            ...purchase.user,
+            purchases: [...(usersWithPurchases.get(purchase.user._id)?.purchases || []), purchase]
+          });
+        }
+      });
+      
+      // Prepare final data
+      const users = allUsers.map(userBreakdown => {
+        const userPurchases = usersWithPurchases.get(userBreakdown.user.id);
+        return {
+          ...userBreakdown.user,
+          hasPurchased: !!userPurchases,
+          purchases: userPurchases?.purchases || [],
+          totalAmount: userPurchases?.purchases.reduce((sum, purchase) => sum + (purchase.amount || 0), 0) || 0
+        };
+      });
+      
+      const stats = {
+        totalUsers: users.length,
+        usersWithPurchases: users.filter(u => u.hasPurchased).length,
+        usersWithoutPurchases: users.filter(u => !u.hasPurchased).length,
+        totalPurchases: purchasesData.length,
+        totalAmount: users.reduce((sum, user) => sum + user.totalAmount, 0)
+      };
+      
+      return { users, stats };
+    } catch (error) {
+      console.error('Error fetching users with purchases:', error);
+      throw error;
+    }
   };
 
   if (loading) {
@@ -124,10 +255,10 @@ const AdminDashboard = () => {
 
       {/* Navigation Tabs */}
       <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
+        <nav className="-mb-px flex space-x-8 overflow-x-auto">
           <button
             onClick={() => setActiveTab('dashboard')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+            className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
               activeTab === 'dashboard'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -137,7 +268,7 @@ const AdminDashboard = () => {
           </button>
           <button
             onClick={() => setActiveTab('payments')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+            className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
               activeTab === 'payments'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -145,12 +276,316 @@ const AdminDashboard = () => {
           >
             💰 Advance Payments
           </button>
+          <button
+            onClick={() => setActiveTab('meal-reports')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+              activeTab === 'meal-reports'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            🍽️ Meal Reports
+          </button>
+          <button
+            onClick={() => setActiveTab('purchase-reports')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+              activeTab === 'purchase-reports'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            🛒 Purchase Reports
+          </button>
         </nav>
       </div>
 
       {/* Tab Content */}
       {activeTab === 'payments' ? (
         <AdvancePaymentManager />
+      ) : activeTab === 'meal-reports' ? (
+        <div className="space-y-6">
+          {/* Meal Reports Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Date Selection */}
+            <div className="card">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">📅 Select Date</h3>
+              <Calendar
+                onChange={setSelectedDate}
+                value={selectedDate}
+                className="w-full border-none"
+                tileClassName="hover:bg-blue-100 rounded"
+              />
+            </div>
+
+            {/* Statistics */}
+            <div className="lg:col-span-2">
+              <div className="card">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  📊 Meal Statistics for {formatDateForDisplay(selectedDate)}
+                </h3>
+                
+                {reportLoading ? (
+                  <div className="flex items-center justify-center h-32">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+                  </div>
+                ) : reportStats ? (
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div className="text-center p-4 bg-blue-50 rounded-lg">
+                      <div className="text-2xl font-bold text-blue-600">{reportStats.totalUsers}</div>
+                      <div className="text-sm text-blue-800">Total Users</div>
+                    </div>
+                    <div className="text-center p-4 bg-green-50 rounded-lg">
+                      <div className="text-2xl font-bold text-green-600">{reportStats.usersWithOrders}</div>
+                      <div className="text-sm text-green-800">Ordered</div>
+                    </div>
+                    <div className="text-center p-4 bg-red-50 rounded-lg">
+                      <div className="text-2xl font-bold text-red-600">{reportStats.usersWithoutOrders}</div>
+                      <div className="text-sm text-red-800">Not Ordered</div>
+                    </div>
+                    <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                      <div className="text-2xl font-bold text-yellow-600">{reportStats.totalOrders}</div>
+                      <div className="text-sm text-yellow-800">Total Orders</div>
+                    </div>
+                    <div className="text-center p-4 bg-purple-50 rounded-lg">
+                      <div className="text-2xl font-bold text-purple-600">{formatCurrency(reportStats.totalAmount)}</div>
+                      <div className="text-sm text-purple-800">Total Amount</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    No data available for selected date
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* User Details Table */}
+          <div className="card">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              👥 User Meal Orders for {formatDateForDisplay(selectedDate)}
+            </h3>
+            
+            {reportLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        User
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Orders Count
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Total Amount
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Order Details
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {mealReports.map((user, index) => (
+                      <tr key={user.id} className={`hover:bg-gray-50 ${!user.hasOrdered ? 'bg-red-50' : ''}`}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center mr-3">
+                              <span className="text-white text-sm font-bold">
+                                {user.name.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                              <div className="text-sm text-gray-500">{user.email}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            user.hasOrdered 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {user.hasOrdered ? '✅ Ordered' : '❌ Not Ordered'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {user.meals.length}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {formatCurrency(user.totalAmount)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {user.hasOrdered ? (
+                            <div className="max-w-xs">
+                              {user.meals.map((meal, idx) => (
+                                <div key={idx} className="text-xs mb-1">
+                                  {meal.description} - {formatCurrency(meal.amount)}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">No orders</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : activeTab === 'purchase-reports' ? (
+        <div className="space-y-6">
+          {/* Purchase Reports Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Date Selection */}
+            <div className="card">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">📅 Select Date</h3>
+              <Calendar
+                onChange={setSelectedDate}
+                value={selectedDate}
+                className="w-full border-none"
+                tileClassName="hover:bg-blue-100 rounded"
+              />
+            </div>
+
+            {/* Statistics */}
+            <div className="lg:col-span-2">
+              <div className="card">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  📊 Purchase Statistics for {formatDateForDisplay(selectedDate)}
+                </h3>
+                
+                {reportLoading ? (
+                  <div className="flex items-center justify-center h-32">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+                  </div>
+                ) : reportStats ? (
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div className="text-center p-4 bg-blue-50 rounded-lg">
+                      <div className="text-2xl font-bold text-blue-600">{reportStats.totalUsers}</div>
+                      <div className="text-sm text-blue-800">Total Users</div>
+                    </div>
+                    <div className="text-center p-4 bg-green-50 rounded-lg">
+                      <div className="text-2xl font-bold text-green-600">{reportStats.usersWithPurchases}</div>
+                      <div className="text-sm text-green-800">Made Purchase</div>
+                    </div>
+                    <div className="text-center p-4 bg-red-50 rounded-lg">
+                      <div className="text-2xl font-bold text-red-600">{reportStats.usersWithoutPurchases}</div>
+                      <div className="text-sm text-red-800">No Purchase</div>
+                    </div>
+                    <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                      <div className="text-2xl font-bold text-yellow-600">{reportStats.totalPurchases}</div>
+                      <div className="text-sm text-yellow-800">Total Purchases</div>
+                    </div>
+                    <div className="text-center p-4 bg-purple-50 rounded-lg">
+                      <div className="text-2xl font-bold text-purple-600">{formatCurrency(reportStats.totalAmount)}</div>
+                      <div className="text-sm text-purple-800">Total Amount</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    No data available for selected date
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* User Details Table */}
+          <div className="card">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              👥 User Purchases for {formatDateForDisplay(selectedDate)}
+            </h3>
+            
+            {reportLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        User
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Purchase Count
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Total Amount
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Purchase Details
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {purchaseReports.map((user, index) => (
+                      <tr key={user.id} className={`hover:bg-gray-50 ${!user.hasPurchased ? 'bg-red-50' : ''}`}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center mr-3">
+                              <span className="text-white text-sm font-bold">
+                                {user.name.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                              <div className="text-sm text-gray-500">{user.email}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            user.hasPurchased 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {user.hasPurchased ? '✅ Purchased' : '❌ No Purchase'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {user.purchases.length}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {formatCurrency(user.totalAmount)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {user.hasPurchased ? (
+                            <div className="max-w-xs">
+                              {user.purchases.map((purchase, idx) => (
+                                <div key={idx} className="text-xs mb-1">
+                                  {purchase.description} - {formatCurrency(purchase.amount)}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">No purchases</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
       ) : (
         <div className="space-y-6">
           {/* Dashboard Content */}

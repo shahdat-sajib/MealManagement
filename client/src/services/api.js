@@ -61,6 +61,9 @@ export const mealsApi = {
   // Get user's meals
   getMeals: (params = {}) => apiCall('GET', `/meals?${new URLSearchParams(params)}`),
   
+  // Alias for getUserMeals
+  getUserMeals: (params = {}) => apiCall('GET', `/meals?${new URLSearchParams(params)}`),
+  
   // Get all meals (admin only)
   getAllMeals: (params = {}) => apiCall('GET', `/meals/all?${new URLSearchParams(params)}`),
   
@@ -84,6 +87,9 @@ export const mealsApi = {
 export const purchasesApi = {
   // Get user's purchases
   getPurchases: (params = {}) => apiCall('GET', `/purchases?${new URLSearchParams(params)}`),
+  
+  // Alias for getUserPurchases
+  getUserPurchases: (params = {}) => apiCall('GET', `/purchases?${new URLSearchParams(params)}`),
   
   // Get all purchases (admin only)
   getAllPurchases: (params = {}) => apiCall('GET', `/purchases/all?${new URLSearchParams(params)}`),
