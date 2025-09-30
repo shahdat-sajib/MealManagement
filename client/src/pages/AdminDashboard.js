@@ -110,19 +110,34 @@ const AdminDashboard = () => {
       const allUsers = usersResponse.data?.userBreakdown || [];
       
       // Fetch meals for the specific date
-      const mealsResponse = await mealsApi.getUserMeals({ date });
-      const mealsData = mealsResponse.data || [];
+      const mealsResponse = await mealsApi.getAllMeals({ startDate: date, endDate: date });
+      console.log('Meals API Response:', mealsResponse);
+      
+      // Handle different response structures
+      let mealsData = [];
+      if (mealsResponse.success && mealsResponse.data) {
+        // The API returns { meals: [...] }
+        if (Array.isArray(mealsResponse.data.meals)) {
+          mealsData = mealsResponse.data.meals;
+        } else if (Array.isArray(mealsResponse.data)) {
+          mealsData = mealsResponse.data;
+        }
+      }
+      
+      console.log('Processed meals data:', mealsData);
       
       // Create a map of users who ordered meals
       const usersWithMeals = new Map();
-      mealsData.forEach(meal => {
-        if (meal.user) {
-          usersWithMeals.set(meal.user._id, {
-            ...meal.user,
-            meals: [...(usersWithMeals.get(meal.user._id)?.meals || []), meal]
-          });
-        }
-      });
+      if (Array.isArray(mealsData)) {
+        mealsData.forEach(meal => {
+          if (meal.user) {
+            usersWithMeals.set(meal.user._id, {
+              ...meal.user,
+              meals: [...(usersWithMeals.get(meal.user._id)?.meals || []), meal]
+            });
+          }
+        });
+      }
       
       // Prepare final data
       const users = allUsers.map(userBreakdown => {
@@ -139,7 +154,7 @@ const AdminDashboard = () => {
         totalUsers: users.length,
         usersWithOrders: users.filter(u => u.hasOrdered).length,
         usersWithoutOrders: users.filter(u => !u.hasOrdered).length,
-        totalOrders: mealsData.length,
+        totalOrders: Array.isArray(mealsData) ? mealsData.length : 0,
         totalAmount: users.reduce((sum, user) => sum + user.totalAmount, 0)
       };
       
@@ -157,19 +172,34 @@ const AdminDashboard = () => {
       const allUsers = usersResponse.data?.userBreakdown || [];
       
       // Fetch purchases for the specific date
-      const purchasesResponse = await purchasesApi.getUserPurchases({ date });
-      const purchasesData = purchasesResponse.data || [];
+      const purchasesResponse = await purchasesApi.getAllPurchases({ startDate: date, endDate: date });
+      console.log('Purchases API Response:', purchasesResponse);
+      
+      // Handle different response structures
+      let purchasesData = [];
+      if (purchasesResponse.success && purchasesResponse.data) {
+        // The API returns { purchases: [...] }
+        if (Array.isArray(purchasesResponse.data.purchases)) {
+          purchasesData = purchasesResponse.data.purchases;
+        } else if (Array.isArray(purchasesResponse.data)) {
+          purchasesData = purchasesResponse.data;
+        }
+      }
+      
+      console.log('Processed purchases data:', purchasesData);
       
       // Create a map of users who made purchases
       const usersWithPurchases = new Map();
-      purchasesData.forEach(purchase => {
-        if (purchase.user) {
-          usersWithPurchases.set(purchase.user._id, {
-            ...purchase.user,
-            purchases: [...(usersWithPurchases.get(purchase.user._id)?.purchases || []), purchase]
-          });
-        }
-      });
+      if (Array.isArray(purchasesData)) {
+        purchasesData.forEach(purchase => {
+          if (purchase.user) {
+            usersWithPurchases.set(purchase.user._id, {
+              ...purchase.user,
+              purchases: [...(usersWithPurchases.get(purchase.user._id)?.purchases || []), purchase]
+            });
+          }
+        });
+      }
       
       // Prepare final data
       const users = allUsers.map(userBreakdown => {
@@ -186,7 +216,7 @@ const AdminDashboard = () => {
         totalUsers: users.length,
         usersWithPurchases: users.filter(u => u.hasPurchased).length,
         usersWithoutPurchases: users.filter(u => !u.hasPurchased).length,
-        totalPurchases: purchasesData.length,
+        totalPurchases: Array.isArray(purchasesData) ? purchasesData.length : 0,
         totalAmount: users.reduce((sum, user) => sum + user.totalAmount, 0)
       };
       
