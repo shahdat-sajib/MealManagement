@@ -9,6 +9,15 @@ export const formatDateForDisplay = (date) => {
   return moment(date).format('MMM DD, YYYY');
 };
 
+// Format date for API calls (timezone-safe)
+export const formatDateForAPI = (date) => {
+  // Use the local date values to avoid timezone conversion
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export const formatDateTimeForDisplay = (date) => {
   return moment(date).format('MMM DD, YYYY HH:mm');
 };

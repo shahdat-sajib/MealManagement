@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { dashboardApi, mealsApi, purchasesApi } from '../services/api';
-import { formatCurrency, formatDateForDisplay, generateColors } from '../utils/helpers';
+import { formatCurrency, formatDateForDisplay, formatDateForAPI, generateColors } from '../utils/helpers';
 import AdvancePaymentManager from '../components/AdvancePaymentManager';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
@@ -84,7 +84,15 @@ const AdminDashboard = () => {
   const fetchDateWiseReports = async () => {
     setReportLoading(true);
     try {
-      const dateStr = selectedDate.toISOString().split('T')[0];
+      const dateStr = formatDateForAPI(selectedDate);
+      console.log('🗓️ Date Selection Debug:', {
+        originalDate: selectedDate,
+        formattedForAPI: dateStr,
+        selectedDateString: selectedDate.toString(),
+        getDate: selectedDate.getDate(),
+        getMonth: selectedDate.getMonth() + 1,
+        getFullYear: selectedDate.getFullYear()
+      });
       
       if (activeTab === 'meal-reports') {
         const result = await getUsersWithMeals(dateStr);
@@ -340,10 +348,21 @@ const AdminDashboard = () => {
             <div className="card">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">📅 Select Date</h3>
               <Calendar
-                onChange={setSelectedDate}
+                onChange={(date) => {
+                  console.log('📅 Meal Calendar onChange:', {
+                    selected: date,
+                    dateString: date.toString(),
+                    getDate: date.getDate(),
+                    getMonth: date.getMonth() + 1,
+                    getFullYear: date.getFullYear()
+                  });
+                  setSelectedDate(date);
+                }}
                 value={selectedDate}
                 className="w-full border-none"
                 tileClassName="hover:bg-blue-100 rounded"
+                locale="en-US"
+                calendarType="gregory"
               />
             </div>
 
@@ -482,10 +501,21 @@ const AdminDashboard = () => {
             <div className="card">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">📅 Select Date</h3>
               <Calendar
-                onChange={setSelectedDate}
+                onChange={(date) => {
+                  console.log('📅 Purchase Calendar onChange:', {
+                    selected: date,
+                    dateString: date.toString(),
+                    getDate: date.getDate(),
+                    getMonth: date.getMonth() + 1,
+                    getFullYear: date.getFullYear()
+                  });
+                  setSelectedDate(date);
+                }}
                 value={selectedDate}
                 className="w-full border-none"
                 tileClassName="hover:bg-blue-100 rounded"
+                locale="en-US"
+                calendarType="gregory"
               />
             </div>
 
