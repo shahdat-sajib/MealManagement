@@ -147,14 +147,28 @@ const AdminDashboard = () => {
         });
       }
       
+      // Get total purchases for the same date to calculate meal costs
+      const purchasesForDate = await purchasesApi.getAllPurchases({ startDate: date, endDate: date });
+      const totalPurchasesAmount = purchasesForDate.success && purchasesForDate.data?.purchases 
+        ? purchasesForDate.data.purchases.reduce((sum, purchase) => sum + (purchase.amount || 0), 0)
+        : 0;
+      
+      // Calculate cost per meal if there are meals
+      const totalMealsCount = Array.isArray(mealsData) ? mealsData.length : 0;
+      const costPerMeal = totalMealsCount > 0 ? totalPurchasesAmount / totalMealsCount : 0;
+      
       // Prepare final data
       const users = allUsers.map(userBreakdown => {
         const userMeals = usersWithMeals.get(userBreakdown.user.id);
+        const userMealsCount = userMeals?.meals.length || 0;
+        const userMealCost = userMealsCount * costPerMeal;
+        
         return {
           ...userBreakdown.user,
           hasOrdered: !!userMeals,
           meals: userMeals?.meals || [],
-          totalAmount: userMeals?.meals.reduce((sum, meal) => sum + (meal.amount || 0), 0) || 0
+          totalAmount: userMealCost, // Cost based on meals * cost per meal
+          mealsCount: userMealsCount
         };
       });
       
@@ -162,8 +176,9 @@ const AdminDashboard = () => {
         totalUsers: users.length,
         usersWithOrders: users.filter(u => u.hasOrdered).length,
         usersWithoutOrders: users.filter(u => !u.hasOrdered).length,
-        totalOrders: Array.isArray(mealsData) ? mealsData.length : 0,
-        totalAmount: users.reduce((sum, user) => sum + user.totalAmount, 0)
+        totalOrders: totalMealsCount,
+        totalAmount: totalPurchasesAmount, // Total purchases for the day
+        costPerMeal: costPerMeal
       };
       
       return { users, stats };
@@ -378,7 +393,7 @@ const AdminDashboard = () => {
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
                   </div>
                 ) : reportStats ? (
-                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
                     <div className="text-center p-4 bg-blue-50 rounded-lg">
                       <div className="text-2xl font-bold text-blue-600">{reportStats.totalUsers}</div>
                       <div className="text-sm text-blue-800">Total Users</div>
@@ -393,11 +408,17 @@ const AdminDashboard = () => {
                     </div>
                     <div className="text-center p-4 bg-yellow-50 rounded-lg">
                       <div className="text-2xl font-bold text-yellow-600">{reportStats.totalOrders}</div>
-                      <div className="text-sm text-yellow-800">Total Orders</div>
+                      <div className="text-sm text-yellow-800">Total Meals</div>
                     </div>
                     <div className="text-center p-4 bg-purple-50 rounded-lg">
                       <div className="text-2xl font-bold text-purple-600">{formatCurrency(reportStats.totalAmount)}</div>
-                      <div className="text-sm text-purple-800">Total Amount</div>
+                      <div className="text-sm text-purple-800">Total Purchases</div>
+                    </div>
+                    <div className="text-center p-4 bg-indigo-50 rounded-lg">
+                      <div className="text-2xl font-bold text-indigo-600">
+                        {reportStats.costPerMeal > 0 ? formatCurrency(reportStats.costPerMeal) : '$0.00'}
+                      </div>
+                      <div className="text-sm text-indigo-800">Cost Per Meal</div>
                     </div>
                   </div>
                 ) : (
@@ -467,17 +488,22 @@ const AdminDashboard = () => {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {user.meals.length}
+                          {user.mealsCount || user.meals.length}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {formatCurrency(user.totalAmount)}
+                          {user.hasOrdered && reportStats?.costPerMeal > 0 && (
+                            <div className="text-xs text-gray-500">
+                              {user.mealsCount || user.meals.length} × {formatCurrency(reportStats.costPerMeal)}
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {user.hasOrdered ? (
                             <div className="max-w-xs">
                               {user.meals.map((meal, idx) => (
                                 <div key={idx} className="text-xs mb-1">
-                                  {meal.description} - {formatCurrency(meal.amount)}
+                                  {meal.description} ({meal.mealType || 'meal'})
                                 </div>
                               ))}
                             </div>
