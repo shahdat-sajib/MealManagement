@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { dashboardApi, mealsApi, purchasesApi } from '../services/api';
-import { formatCurrency, formatDateForDisplay, formatDateForAPI, generateColors } from '../utils/helpers';
+import { formatCurrency, formatDateForDisplay, formatDateForAPI, generateColors, getWeekDateRange, getCurrentMonthYear, getMonthOptions, getFilterDescription } from '../utils/helpers';
 import AdvancePaymentManager from '../components/AdvancePaymentManager';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
@@ -12,6 +12,7 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState('current-week');
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthYear());
   
   // Date-wise reports state
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -22,7 +23,7 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     fetchAdminData();
-  }, [dateRange]);
+  }, [dateRange, selectedMonth]);
 
   useEffect(() => {
     if (activeTab === 'meal-reports' || activeTab === 'purchase-reports') {
@@ -43,39 +44,41 @@ const AdminDashboard = () => {
   };
 
   const getDateParams = () => {
-    const now = new Date();
     const params = {};
     
     switch (dateRange) {
-      case 'current-week':
+      case 'current-week': {
+        const now = new Date();
         const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
         const endOfWeek = new Date(now.setDate(now.getDate() - now.getDay() + 6));
         params.startDate = startOfWeek.toISOString().split('T')[0];
         params.endDate = endOfWeek.toISOString().split('T')[0];
         break;
+      }
       case 'week-1':
-        params.week = 1;
-        break;
       case 'week-2':
-        params.week = 2;
-        break;
       case 'week-3':
-        params.week = 3;
+      case 'week-4': {
+        const weekNum = parseInt(dateRange.split('-')[1]);
+        params.week = weekNum;
+        params.month = selectedMonth.month;
+        params.year = selectedMonth.year;
         break;
-      case 'week-4':
-        params.week = 4;
-        break;
-      case 'current-month':
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      }
+      case 'current-month': {
+        const monthStart = new Date(selectedMonth.year, selectedMonth.month - 1, 1);
+        const monthEnd = new Date(selectedMonth.year, selectedMonth.month, 0);
         params.startDate = monthStart.toISOString().split('T')[0];
         params.endDate = monthEnd.toISOString().split('T')[0];
         break;
-      default:
-        const defaultStart = new Date(now.setDate(now.getDate() - now.getDay()));
-        const defaultEnd = new Date(now.setDate(now.getDate() - now.getDay() + 6));
-        params.startDate = defaultStart.toISOString().split('T')[0];
-        params.endDate = defaultEnd.toISOString().split('T')[0];
+      }
+      default: {
+        const now = new Date();
+        const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
+        const endOfWeek = new Date(now.setDate(now.getDate() - now.getDay() + 6));
+        params.startDate = startOfWeek.toISOString().split('T')[0];
+        params.endDate = endOfWeek.toISOString().split('T')[0];
+      }
     }
     
     return params;
@@ -288,21 +291,51 @@ const AdminDashboard = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
           <p className="text-gray-600">System overview and user management</p>
+          {activeTab === 'dashboard' && (
+            <p className="text-sm text-blue-600 font-medium mt-1">
+              Showing: {getFilterDescription(dateRange, selectedMonth)}
+            </p>
+          )}
         </div>
         
         {activeTab === 'dashboard' && (
-          <select
-            value={dateRange}
-            onChange={(e) => setDateRange(e.target.value)}
-            className="input max-w-xs"
-          >
-            <option value="current-week">Current Week</option>
-            <option value="week-1">Week 1 of Month</option>
-            <option value="week-2">Week 2 of Month</option>
-            <option value="week-3">Week 3 of Month</option>
-            <option value="week-4">Week 4 of Month</option>
-            <option value="current-month">Current Month</option>
-          </select>
+          <div className="flex flex-col sm:flex-row gap-2">
+            {/* Month/Year Selection for Week Filters */}
+            {['week-1', 'week-2', 'week-3', 'week-4', 'current-month'].includes(dateRange) && (
+              <select
+                value={`${selectedMonth.year}-${selectedMonth.month.toString().padStart(2, '0')}`}
+                onChange={(e) => {
+                  const [year, month] = e.target.value.split('-');
+                  setSelectedMonth({
+                    month: parseInt(month),
+                    year: parseInt(year),
+                    display: `${new Date(year, month - 1).toLocaleString('default', { month: 'long' })} ${year}`
+                  });
+                }}
+                className="input max-w-xs"
+              >
+                {getMonthOptions().map(option => (
+                  <option key={option.key} value={option.key}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            )}
+            
+            {/* Date Range Selection */}
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
+              className="input max-w-xs"
+            >
+              <option value="current-week">Current Week</option>
+              <option value="week-1">Week 1 (1st - 7th)</option>
+              <option value="week-2">Week 2 (8th - 14th)</option>
+              <option value="week-3">Week 3 (15th - 21st)</option>
+              <option value="week-4">Week 4 (22nd - End of Month)</option>
+              <option value="current-month">Full Month</option>
+            </select>
+          </div>
         )}
       </div>
 

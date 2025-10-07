@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { dashboardApi } from '../services/api';
-import { formatCurrency, formatDateForDisplay } from '../utils/helpers';
+import { formatCurrency, formatDateForDisplay, getWeekDateRange, getCurrentMonthYear, getMonthOptions, getFilterDescription } from '../utils/helpers';
 import toast from 'react-hot-toast';
 
 const Dashboard = () => {
@@ -9,11 +9,12 @@ const Dashboard = () => {
   const [historyData, setHistoryData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState('current-week');
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthYear());
 
   useEffect(() => {
     fetchDashboardData();
     fetchHistoryData();
-  }, [dateRange]);
+  }, [dateRange, selectedMonth]);
 
   const fetchDashboardData = async () => {
     const params = getDateParams();
@@ -36,39 +37,41 @@ const Dashboard = () => {
   };
 
   const getDateParams = () => {
-    const now = new Date();
     const params = {};
     
     switch (dateRange) {
-      case 'current-week':
+      case 'current-week': {
+        const now = new Date();
         const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
         const endOfWeek = new Date(now.setDate(now.getDate() - now.getDay() + 6));
         params.startDate = startOfWeek.toISOString().split('T')[0];
         params.endDate = endOfWeek.toISOString().split('T')[0];
         break;
+      }
       case 'week-1':
-        params.week = 1;
-        break;
       case 'week-2':
-        params.week = 2;
-        break;
       case 'week-3':
-        params.week = 3;
+      case 'week-4': {
+        const weekNum = parseInt(dateRange.split('-')[1]);
+        params.week = weekNum;
+        params.month = selectedMonth.month;
+        params.year = selectedMonth.year;
         break;
-      case 'week-4':
-        params.week = 4;
-        break;
-      case 'current-month':
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      }
+      case 'current-month': {
+        const monthStart = new Date(selectedMonth.year, selectedMonth.month - 1, 1);
+        const monthEnd = new Date(selectedMonth.year, selectedMonth.month, 0);
         params.startDate = monthStart.toISOString().split('T')[0];
         params.endDate = monthEnd.toISOString().split('T')[0];
         break;
-      default:
-        const defaultStart = new Date(now.setDate(now.getDate() - now.getDay()));
-        const defaultEnd = new Date(now.setDate(now.getDate() - now.getDay() + 6));
-        params.startDate = defaultStart.toISOString().split('T')[0];
-        params.endDate = defaultEnd.toISOString().split('T')[0];
+      }
+      default: {
+        const now = new Date();
+        const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
+        const endOfWeek = new Date(now.setDate(now.getDate() - now.getDay() + 6));
+        params.startDate = startOfWeek.toISOString().split('T')[0];
+        params.endDate = endOfWeek.toISOString().split('T')[0];
+      }
     }
     
     return params;
@@ -96,20 +99,48 @@ const Dashboard = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-600">Overview of your meal expenses and balance</p>
+          <p className="text-sm text-blue-600 font-medium mt-1">
+            Showing: {getFilterDescription(dateRange, selectedMonth)}
+          </p>
         </div>
         
-        <select
-          value={dateRange}
-          onChange={(e) => setDateRange(e.target.value)}
-          className="input max-w-xs"
-        >
-          <option value="current-week">Current Week</option>
-          <option value="week-1">Week 1 of Month</option>
-          <option value="week-2">Week 2 of Month</option>
-          <option value="week-3">Week 3 of Month</option>
-          <option value="week-4">Week 4+ of Month (includes remaining days)</option>
-          <option value="current-month">Current Month</option>
-        </select>
+        <div className="flex flex-col sm:flex-row gap-2">
+          {/* Month/Year Selection for Week Filters */}
+          {['week-1', 'week-2', 'week-3', 'week-4', 'current-month'].includes(dateRange) && (
+            <select
+              value={`${selectedMonth.year}-${selectedMonth.month.toString().padStart(2, '0')}`}
+              onChange={(e) => {
+                const [year, month] = e.target.value.split('-');
+                setSelectedMonth({
+                  month: parseInt(month),
+                  year: parseInt(year),
+                  display: `${new Date(year, month - 1).toLocaleString('default', { month: 'long' })} ${year}`
+                });
+              }}
+              className="input max-w-xs"
+            >
+              {getMonthOptions().map(option => (
+                <option key={option.key} value={option.key}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          )}
+          
+          {/* Date Range Selection */}
+          <select
+            value={dateRange}
+            onChange={(e) => setDateRange(e.target.value)}
+            className="input max-w-xs"
+          >
+            <option value="current-week">Current Week</option>
+            <option value="week-1">Week 1 (1st - 7th)</option>
+            <option value="week-2">Week 2 (8th - 14th)</option>
+            <option value="week-3">Week 3 (15th - 21st)</option>
+            <option value="week-4">Week 4 (22nd - End of Month)</option>
+            <option value="current-month">Full Month</option>
+          </select>
+        </div>
       </div>
 
       {/* Summary Cards */}

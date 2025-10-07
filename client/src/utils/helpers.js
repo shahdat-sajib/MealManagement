@@ -179,3 +179,111 @@ export const generateColors = (count) => {
   }
   return result;
 };
+
+// Week utilities for proper calendar week filtering
+export const getWeekDateRange = (weekNumber, month, year) => {
+  const targetMonth = month !== undefined ? month - 1 : moment().month(); // moment months are 0-based
+  const targetYear = year !== undefined ? year : moment().year();
+  
+  const monthStart = moment().year(targetYear).month(targetMonth).date(1);
+  const monthEnd = moment().year(targetYear).month(targetMonth).endOf('month');
+  
+  let start, end;
+  
+  if (weekNumber === 1) {
+    // Week 1: 1st to 7th
+    start = monthStart.clone().date(1);
+    end = monthStart.clone().date(7);
+  } else if (weekNumber === 2) {
+    // Week 2: 8th to 14th  
+    start = monthStart.clone().date(8);
+    end = monthStart.clone().date(14);
+  } else if (weekNumber === 3) {
+    // Week 3: 15th to 21st
+    start = monthStart.clone().date(15);
+    end = monthStart.clone().date(21);
+  } else if (weekNumber === 4) {
+    // Week 4: 22nd to end of month
+    start = monthStart.clone().date(22);
+    end = monthEnd.clone();
+  } else {
+    // Invalid week number, return current week
+    start = moment().startOf('week');
+    end = moment().endOf('week');
+  }
+  
+  // Ensure we don't go beyond the month boundaries
+  if (end.isAfter(monthEnd)) {
+    end = monthEnd.clone();
+  }
+  
+  return {
+    start: start.format('YYYY-MM-DD'),
+    end: end.format('YYYY-MM-DD'),
+    display: `${start.format('MMM DD')} - ${end.format('MMM DD, YYYY')}`
+  };
+};
+
+export const getCurrentMonthYear = () => {
+  const now = moment();
+  return {
+    month: now.month() + 1, // Convert to 1-based
+    year: now.year(),
+    display: now.format('MMMM YYYY')
+  };
+};
+
+export const getMonthOptions = (monthsBack = 12, monthsForward = 3) => {
+  const options = [];
+  const current = moment();
+  
+  // Add past months (including current)
+  for (let i = monthsBack - 1; i >= 0; i--) {
+    const monthMoment = current.clone().subtract(i, 'months');
+    options.push({
+      value: {
+        month: monthMoment.month() + 1,
+        year: monthMoment.year()
+      },
+      label: monthMoment.format('MMMM YYYY'),
+      key: monthMoment.format('YYYY-MM')
+    });
+  }
+  
+  // Add future months
+  for (let i = 1; i <= monthsForward; i++) {
+    const monthMoment = current.clone().add(i, 'months');
+    options.push({
+      value: {
+        month: monthMoment.month() + 1,
+        year: monthMoment.year()
+      },
+      label: monthMoment.format('MMMM YYYY'),
+      key: monthMoment.format('YYYY-MM')
+    });
+  }
+  
+  return options;
+};
+
+// Get a human-readable description of the current filter selection
+export const getFilterDescription = (dateRange, selectedMonth) => {
+  const monthName = moment().month(selectedMonth.month - 1).format('MMMM');
+  
+  switch (dateRange) {
+    case 'current-week':
+      return 'Current Week';
+    case 'week-1':
+      return `Week 1 (1st-7th) of ${monthName} ${selectedMonth.year}`;
+    case 'week-2':
+      return `Week 2 (8th-14th) of ${monthName} ${selectedMonth.year}`;
+    case 'week-3':
+      return `Week 3 (15th-21st) of ${monthName} ${selectedMonth.year}`;
+    case 'week-4':
+      return `Week 4 (22nd-End) of ${monthName} ${selectedMonth.year}`;
+    case 'current-month':
+      return `Full ${monthName} ${selectedMonth.year}`;
+    default:
+      return 'Custom Range';
+  }
+};

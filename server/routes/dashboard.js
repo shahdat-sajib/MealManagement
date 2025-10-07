@@ -11,7 +11,7 @@ const router = express.Router();
 // Get dashboard data for current user
 router.get('/', auth, async (req, res) => {
   try {
-    const { startDate, endDate, week } = req.query;
+    const { startDate, endDate, week, month, year } = req.query;
     let dateFilter = {};
 
     if (startDate && endDate) {
@@ -20,18 +20,44 @@ router.get('/', auth, async (req, res) => {
         $lte: new Date(endDate)
       };
     } else if (week) {
-      // Get specific week of current month
+      // Get specific week of current month (calendar-based weeks)
       const weekNum = parseInt(week);
-      const monthStart = moment().startOf('month');
-      const monthEnd = moment().endOf('month');
-      const start = monthStart.clone().add((weekNum - 1) * 7, 'days').startOf('day');
       
-      let end;
-      if (weekNum === 4) {
-        // Week 4 includes all remaining days of the month (29, 30, 31)
-        end = monthEnd.clone().endOf('day');
+      // Use current month/year if not specified
+      const targetMonth = month ? parseInt(month) - 1 : moment().month(); // moment months are 0-based
+      const targetYear = year ? parseInt(year) : moment().year();
+      
+      const monthStart = moment().year(targetYear).month(targetMonth).date(1).startOf('day');
+      const monthEnd = moment().year(targetYear).month(targetMonth).endOf('month').endOf('day');
+      
+      let start, end;
+      
+      if (weekNum === 1) {
+        // Week 1: 1st to 7th
+        start = monthStart.clone().date(1);
+        end = monthStart.clone().date(7).endOf('day');
+      } else if (weekNum === 2) {
+        // Week 2: 8th to 14th  
+        start = monthStart.clone().date(8);
+        end = monthStart.clone().date(14).endOf('day');
+      } else if (weekNum === 3) {
+        // Week 3: 15th to 21st
+        start = monthStart.clone().date(15);
+        end = monthStart.clone().date(21).endOf('day');
+      } else if (weekNum === 4) {
+        // Week 4: 22nd to end of month
+        start = monthStart.clone().date(22);
+        end = monthEnd.clone();
       } else {
-        end = start.clone().add(6, 'days').endOf('day');
+        // Invalid week number, default to current week
+        const now = moment();
+        start = now.clone().startOf('week');
+        end = now.clone().endOf('week');
+      }
+      
+      // Ensure we don't go beyond the month boundaries
+      if (end.isAfter(monthEnd)) {
+        end = monthEnd.clone();
       }
       
       dateFilter = { $gte: start.toDate(), $lte: end.toDate() };
@@ -116,24 +142,33 @@ router.get('/', auth, async (req, res) => {
     const isDue = balanceWithAdvance < 0;
     const finalAmount = Math.abs(balanceWithAdvance);
 
-    // Generate weekly breakdown for current month
+    // Generate weekly breakdown for current month (calendar weeks)
     const weeklyBreakdown = [];
     const monthStart = moment().startOf('month');
     const monthEnd = moment().endOf('month');
-    let currentWeek = monthStart.clone().startOf('week');
     
-    while (currentWeek.isBefore(monthEnd)) {
-      const weekEnd = currentWeek.clone().add(6, 'days').endOf('day');
-      const weekFilter = { 
-        $gte: currentWeek.toDate(), 
-        $lte: weekEnd.toDate() 
-      };
+    // Define calendar weeks: 1-7, 8-14, 15-21, 22-end
+    const weeks = [
+      { num: 1, start: 1, end: 7 },
+      { num: 2, start: 8, end: 14 },
+      { num: 3, start: 15, end: 21 },
+      { num: 4, start: 22, end: monthEnd.date() }
+    ];
+    
+    weeks.forEach(({ num, start, end }) => {
+      const weekStart = monthStart.clone().date(start).startOf('day');
+      let weekEnd = monthStart.clone().date(Math.min(end, monthEnd.date())).endOf('day');
+      
+      // Ensure we don't go beyond month end
+      if (weekEnd.isAfter(monthEnd)) {
+        weekEnd = monthEnd.clone();
+      }
       
       const weekMeals = userMeals.filter(meal => 
-        moment(meal.date).isBetween(currentWeek, weekEnd, null, '[]')
+        moment(meal.date).isBetween(weekStart, weekEnd, null, '[]')
       );
       const weekPurchases = userPurchases.filter(purchase =>
-        moment(purchase.date).isBetween(currentWeek, weekEnd, null, '[]')
+        moment(purchase.date).isBetween(weekStart, weekEnd, null, '[]')
       );
       
       let weekExpense = 0;
@@ -155,8 +190,8 @@ router.get('/', auth, async (req, res) => {
       const weekBalance = weekPurchaseTotal - weekExpense;
       
       weeklyBreakdown.push({
-        week: `Week ${Math.ceil(currentWeek.diff(monthStart, 'days') / 7) + 1}`,
-        startDate: currentWeek.format('MMM DD'),
+        week: `Week ${num}`,
+        startDate: weekStart.format('MMM DD'),
         endDate: weekEnd.format('MMM DD'),
         meals: weekMeals.length,
         purchases: weekPurchaseTotal,
@@ -166,9 +201,7 @@ router.get('/', auth, async (req, res) => {
         amount: Math.abs(weekBalance),
         status: weekBalance < 0 ? 'Due' : 'Credit'
       });
-      
-      currentWeek.add(1, 'week');
-    }
+    });
 
     const dashboardData = {
       summary: {
@@ -200,7 +233,7 @@ router.get('/', auth, async (req, res) => {
 // Get admin dashboard with all users' data
 router.get('/admin', [auth, adminAuth], async (req, res) => {
   try {
-    const { startDate, endDate, week } = req.query;
+    const { startDate, endDate, week, month, year } = req.query;
     let dateFilter = {};
 
     if (startDate && endDate) {
@@ -209,18 +242,44 @@ router.get('/admin', [auth, adminAuth], async (req, res) => {
         $lte: new Date(endDate)
       };
     } else if (week) {
-      // Get specific week of current month
+      // Get specific week of current month (calendar-based weeks)
       const weekNum = parseInt(week);
-      const monthStart = moment().startOf('month');
-      const monthEnd = moment().endOf('month');
-      const start = monthStart.clone().add((weekNum - 1) * 7, 'days').startOf('day');
       
-      let end;
-      if (weekNum === 4) {
-        // Week 4 includes all remaining days of the month (29, 30, 31)
-        end = monthEnd.clone().endOf('day');
+      // Use current month/year if not specified
+      const targetMonth = month ? parseInt(month) - 1 : moment().month(); // moment months are 0-based
+      const targetYear = year ? parseInt(year) : moment().year();
+      
+      const monthStart = moment().year(targetYear).month(targetMonth).date(1).startOf('day');
+      const monthEnd = moment().year(targetYear).month(targetMonth).endOf('month').endOf('day');
+      
+      let start, end;
+      
+      if (weekNum === 1) {
+        // Week 1: 1st to 7th
+        start = monthStart.clone().date(1);
+        end = monthStart.clone().date(7).endOf('day');
+      } else if (weekNum === 2) {
+        // Week 2: 8th to 14th  
+        start = monthStart.clone().date(8);
+        end = monthStart.clone().date(14).endOf('day');
+      } else if (weekNum === 3) {
+        // Week 3: 15th to 21st
+        start = monthStart.clone().date(15);
+        end = monthStart.clone().date(21).endOf('day');
+      } else if (weekNum === 4) {
+        // Week 4: 22nd to end of month
+        start = monthStart.clone().date(22);
+        end = monthEnd.clone();
       } else {
-        end = start.clone().add(6, 'days').endOf('day');
+        // Invalid week number, default to current week
+        const now = moment();
+        start = now.clone().startOf('week');
+        end = now.clone().endOf('week');
+      }
+      
+      // Ensure we don't go beyond the month boundaries
+      if (end.isAfter(monthEnd)) {
+        end = monthEnd.clone();
       }
       
       dateFilter = { $gte: start.toDate(), $lte: end.toDate() };
