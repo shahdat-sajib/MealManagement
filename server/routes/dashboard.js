@@ -172,17 +172,30 @@ router.get('/', auth, async (req, res) => {
       );
       
       let weekExpense = 0;
+      
+      // Group user's week meals by date to avoid double counting
+      const userMealsByDate = {};
       weekMeals.forEach(meal => {
         const dateKey = moment(meal.date).format('YYYY-MM-DD');
-        const dayMeals = totalMeals.filter(m => 
+        if (!userMealsByDate[dateKey]) {
+          userMealsByDate[dateKey] = 0;
+        }
+        userMealsByDate[dateKey]++;
+      });
+      
+      // Calculate expense for each day in the week
+      Object.keys(userMealsByDate).forEach(dateKey => {
+        const userMealsOnDay = userMealsByDate[dateKey];
+        const dayTotalMeals = totalMeals.filter(m => 
           moment(m.date).format('YYYY-MM-DD') === dateKey
         ).length;
-        const dayPurchases = totalPurchases
+        const dayTotalPurchases = totalPurchases
           .filter(p => moment(p.date).format('YYYY-MM-DD') === dateKey)
           .reduce((sum, p) => sum + p.amount, 0);
         
-        if (dayMeals > 0) {
-          weekExpense += dayPurchases / dayMeals;
+        if (dayTotalMeals > 0) {
+          const dailyCostPerMeal = dayTotalPurchases / dayTotalMeals;
+          weekExpense += userMealsOnDay * dailyCostPerMeal;
         }
       });
       
@@ -330,12 +343,23 @@ router.get('/admin', [auth, adminAuth], async (req, res) => {
       });
       
       // Calculate user's daily expenses
+      // Group user meals by date to avoid double counting
+      const userMealsByDate = {};
       userMeals.forEach(meal => {
         const dateKey = moment(meal.date).format('YYYY-MM-DD');
+        if (!userMealsByDate[dateKey]) {
+          userMealsByDate[dateKey] = 0;
+        }
+        userMealsByDate[dateKey]++;
+      });
+      
+      // Calculate total expense for all days
+      Object.keys(userMealsByDate).forEach(dateKey => {
+        const userMealsOnDay = userMealsByDate[dateKey];
         const dayTotalMeals = dailyMealCounts[dateKey] || 1;
         const dayTotalPurchases = dailyPurchaseTotals[dateKey] || 0;
         const costPerMeal = dayTotalPurchases / dayTotalMeals;
-        userTotalExpense += costPerMeal;
+        userTotalExpense += userMealsOnDay * costPerMeal;
       });
       
       const rawBalance = totalPurchases - userTotalExpense;
