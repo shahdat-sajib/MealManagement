@@ -137,10 +137,10 @@ const WeeklyAdminDashboard = () => {
               <p className="text-sm font-medium text-orange-600">Total Carry Forward</p>
               <p className="text-2xl font-bold text-orange-900">{formatCurrency(weeklyTotals.totalCarryForward)}</p>
             </div>
-            <div className={`p-4 rounded-lg ${weeklyTotals.netBalance >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
-              <p className={`text-sm font-medium ${weeklyTotals.netBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>Net Balance</p>
-              <p className={`text-2xl font-bold ${weeklyTotals.netBalance >= 0 ? 'text-green-900' : 'text-red-900'}`}>
-                {formatCurrency(Math.abs(weeklyTotals.netBalance))} {weeklyTotals.netBalance >= 0 ? 'Credit' : 'Due'}
+            <div className={`p-4 rounded-lg ${(weeklyTotals.netBalance || 0) >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+              <p className={`text-sm font-medium ${(weeklyTotals.netBalance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>Net Balance</p>
+              <p className={`text-2xl font-bold ${(weeklyTotals.netBalance || 0) >= 0 ? 'text-green-900' : 'text-red-900'}`}>
+                {formatCurrency(Math.abs(weeklyTotals.netBalance || 0))} {(weeklyTotals.netBalance || 0) >= 0 ? 'Credit' : 'Due'}
               </p>
             </div>
           </div>
