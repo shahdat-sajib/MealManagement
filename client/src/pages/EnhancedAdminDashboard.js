@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import WeeklyAdminDashboard from './WeeklyAdminDashboard';
-import WeeklyPaymentManager from './WeeklyPaymentManager';
+import WeeklyPaymentReceipts from '../components/WeeklyPaymentReceipts';
 import AdvancePaymentManager from '../components/AdvancePaymentManager';
 
 const EnhancedAdminDashboard = () => {
@@ -8,7 +8,7 @@ const EnhancedAdminDashboard = () => {
 
   const tabs = [
     { id: 'dashboard', name: 'Weekly Dashboard', icon: '📊' },
-    { id: 'payments', name: 'Payment Manager', icon: '💰' },
+    { id: 'payments', name: 'Payment Receipts', icon: '💰' },
     { id: 'advance', name: 'Advance Management', icon: '💳' }
   ];
 
@@ -17,7 +17,7 @@ const EnhancedAdminDashboard = () => {
       case 'dashboard':
         return <WeeklyAdminDashboard />;
       case 'payments':
-        return <WeeklyPaymentManager />;
+        return <WeeklyPaymentReceipts />;
       case 'advance':
         return <AdvancePaymentManager />;
       default:

@@ -70,6 +70,7 @@ app.use('/api/purchases', require('./routes/purchases'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/advance-payments', require('./routes/advancePayments'));
 app.use('/api/calculation', require('./routes/calculation'));
+app.use('/api/payment-receipts', require('./routes/paymentReceipts'));
 
 // Test CORS endpoint
 app.get('/api/test-cors', (req, res) => {

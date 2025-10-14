@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { dashboardApi } from '../services/api';
 import { formatCurrency, formatDateForDisplay, getWeekDateRange, getCurrentMonthYear, getMonthOptions, getFilterDescription } from '../utils/helpers';
+import PaymentReceiptHistory from '../components/PaymentReceiptHistory';
 import toast from 'react-hot-toast';
 
 const Dashboard = () => {
@@ -427,6 +428,9 @@ const Dashboard = () => {
           </div>
         </div>
       )}
+
+      {/* Payment Receipt History */}
+      <PaymentReceiptHistory />
     </div>
   );
 };
