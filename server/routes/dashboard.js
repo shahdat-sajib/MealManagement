@@ -3,8 +3,10 @@ const moment = require('moment');
 const Meal = require('../models/Meal');
 const Purchase = require('../models/Purchase');
 const User = require('../models/User');
+const WeeklyBalance = require('../models/WeeklyBalance');
 const { auth } = require('../middleware/auth');
 const { adminAuth } = require('../middleware/adminAuth');
+const WeeklyCalculationService = require('../services/WeeklyCalculationService');
 
 const router = express.Router();
 
@@ -479,6 +481,136 @@ router.get('/history', auth, async (req, res) => {
   } catch (error) {
     console.error('History error:', error);
     res.status(500).json({ message: 'Server error fetching expense history' });
+  }
+});
+
+// Get new weekly dashboard data for current user
+router.get('/weekly', auth, async (req, res) => {
+  try {
+    const { year, month } = req.query;
+    
+    // Default to current month if not specified
+    const targetYear = year ? parseInt(year) : moment().year();
+    const targetMonth = month ? parseInt(month) : moment().month() + 1;
+    
+    // Get user's weekly breakdown
+    const weeklyBreakdown = await WeeklyCalculationService.getUserWeeklyBreakdown(
+      req.user._id, 
+      targetYear, 
+      targetMonth
+    );
+    
+    // Calculate summary
+    const summary = weeklyBreakdown.reduce((acc, week) => ({
+      totalMeals: acc.totalMeals + week.meals,
+      totalPurchases: acc.totalPurchases + week.purchases,
+      totalAdvancePayments: acc.totalAdvancePayments + (week.advancePayments || 0),
+      totalExpense: acc.totalExpense + week.expense,
+      totalAdvanceReceived: acc.totalAdvanceReceived + week.advanceFromPrevious,
+      totalAdvanceGenerated: acc.totalAdvanceGenerated + week.advanceViaPurchase,
+      totalAdvanceFromPayments: acc.totalAdvanceFromPayments + (week.advanceViaPayments || 0)
+    }), {
+      totalMeals: 0,
+      totalPurchases: 0,
+      totalAdvancePayments: 0,
+      totalExpense: 0,
+      totalAdvanceReceived: 0,
+      totalAdvanceGenerated: 0,
+      totalAdvanceFromPayments: 0
+    });
+    
+    // Get user's advance balance
+    const user = await User.findById(req.user._id);
+    const advanceBalance = user.advanceBalance || 0;
+    
+    res.json({
+      summary: {
+        ...summary,
+        advanceBalance,
+        monthYear: moment().year(targetYear).month(targetMonth - 1).format('MMMM YYYY')
+      },
+      weeklyBreakdown,
+      systemStats: {
+        calculationMethod: 'Weekly Reset System',
+        advanceSystem: 'Purchase-based Auto Advance'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Weekly dashboard error:', error);
+    res.status(500).json({ message: 'Server error fetching weekly dashboard data' });
+  }
+});
+
+// Get enhanced admin dashboard with comprehensive meal tracking
+router.get('/admin/enhanced', [auth, adminAuth], async (req, res) => {
+  try {
+    const { year, month, week } = req.query;
+    
+    // Default to current month if not specified
+    const targetYear = year ? parseInt(year) : moment().year();
+    const targetMonth = month ? parseInt(month) : moment().month() + 1;
+    const targetWeek = week ? parseInt(week) : null;
+    
+    const adminData = await WeeklyCalculationService.getAdminDashboardData(
+      targetYear, 
+      targetMonth, 
+      targetWeek
+    );
+    
+    // Get additional system statistics
+    const WeeklyBalance = require('../models/WeeklyBalance');
+    const systemStats = await WeeklyBalance.aggregate([
+      {
+        $match: {
+          year: targetYear,
+          month: targetMonth,
+          ...(targetWeek && { week: targetWeek })
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalDue: {
+            $sum: {
+              $cond: [{ $eq: ['$isDue', true] }, '$finalAmount', 0]
+            }
+          },
+          totalCredit: {
+            $sum: {
+              $cond: [{ $eq: ['$isDue', false] }, '$finalAmount', 0]
+            }
+          },
+          totalAdvanceGenerated: { $sum: '$advanceViaPurchase' },
+          totalAdvanceUsed: { $sum: '$advanceFromPreviousWeek' }
+        }
+      }
+    ]);
+    
+    const enhancedSystemStats = {
+      ...adminData.summary,
+      ...(systemStats[0] || {
+        totalDue: 0,
+        totalCredit: 0,
+        totalAdvanceGenerated: 0,
+        totalAdvanceUsed: 0
+      }),
+      netBalance: (systemStats[0]?.totalCredit || 0) - (systemStats[0]?.totalDue || 0),
+      calculationMethod: 'Weekly Reset System',
+      periodDescription: targetWeek 
+        ? `Week ${targetWeek} of ${moment().year(targetYear).month(targetMonth - 1).format('MMMM YYYY')}`
+        : moment().year(targetYear).month(targetMonth - 1).format('MMMM YYYY')
+    };
+    
+    res.json({
+      systemStats: enhancedSystemStats,
+      userStats: adminData.userStats,
+      weekStats: adminData.weekStats
+    });
+    
+  } catch (error) {
+    console.error('Enhanced admin dashboard error:', error);
+    res.status(500).json({ message: 'Server error fetching enhanced admin dashboard data' });
   }
 });
 

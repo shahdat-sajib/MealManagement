@@ -109,14 +109,29 @@ export const purchasesApi = {
 
 // Dashboard API
 export const dashboardApi = {
-  // Get user dashboard
+  // Get user dashboard (legacy)
   getDashboard: (params = {}) => apiCall('GET', `/dashboard?${new URLSearchParams(params)}`),
   
-  // Get admin dashboard
+  // Get new weekly dashboard
+  getWeeklyDashboard: (params = {}) => apiCall('GET', `/dashboard/weekly?${new URLSearchParams(params)}`),
+  
+  // Get admin dashboard (legacy)
   getAdminDashboard: (params = {}) => apiCall('GET', `/dashboard/admin?${new URLSearchParams(params)}`),
+  
+  // Get enhanced admin dashboard
+  getEnhancedAdminDashboard: (params = {}) => apiCall('GET', `/dashboard/admin/enhanced?${new URLSearchParams(params)}`),
   
   // Get expense history
   getHistory: (params = {}) => apiCall('GET', `/dashboard/history?${new URLSearchParams(params)}`)
+};
+
+// Calculation API
+export const calculationApi = {
+  // Recalculate all weekly balances (Admin only)
+  recalculateAll: () => apiCall('POST', '/calculation/recalculate-all'),
+  
+  // Get system statistics
+  getSystemStats: () => apiCall('GET', '/calculation/system-stats')
 };
 
 // Users API
