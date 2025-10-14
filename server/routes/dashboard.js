@@ -100,23 +100,32 @@ router.get('/', auth, async (req, res) => {
       targetMonth
     );
 
-    // Summary reflecting requested week & overall month context
+    // Summary for user dashboard - clear display according to requirements
     const summary = {
+      // Week info
       week: `Week ${weeklyRecord.week}`,
       weekStart: moment(weeklyRecord.weekStart).format('MMM DD'),
       weekEnd: moment(weeklyRecord.weekEnd).format('MMM DD'),
-      totalMeals: weeklyRecord.totalMeals,
-      totalPurchases: weeklyRecord.totalPurchases,
-      totalAdvancePayments: weeklyRecord.totalAdvancePayments,
-      totalExpense: weeklyRecord.totalExpense,
-      previousAdvance: weeklyRecord.advanceFromPreviousWeek,
-      weeklyBalance: weeklyRecord.weeklyBalance,
-      carryForwardAdvance: weeklyRecord.advanceToNextWeek,
-      advanceBalance: weeklyRecord.advanceToNextWeek, // for UI compatibility (represents next week's starting advance)
+      monthYear: moment().year(targetYear).month(targetMonth - 1).format('MMMM YYYY'),
+      
+      // Weekly data (starts from 0 each week)
+      totalMeals: weeklyRecord.totalMeals, // Total meal count for this week
+      totalPurchases: weeklyRecord.totalPurchases, // Total purchase within the week
+      totalAdvancePayments: weeklyRecord.totalAdvancePayments, // Advance payments added this week
+      totalExpense: weeklyRecord.totalExpense, // Total meal cost for this week
+      
+      // Advance Balance calculation
+      previousAdvance: weeklyRecord.advanceFromPreviousWeek, // Previous carry forward advance
+      advanceBalance: weeklyRecord.advanceBalance, // Total advance available (previous + payments + purchases)
+      
+      // Final Calculation
+      finalCalculation: weeklyRecord.weeklyBalance, // Advance Balance - Meal Cost
       isDue: weeklyRecord.isDue,
       finalAmount: weeklyRecord.finalAmount,
       status: weeklyRecord.status,
-      monthYear: moment().year(targetYear).month(targetMonth - 1).format('MMMM YYYY')
+      
+      // Next week carry forward
+      carryForwardAdvance: weeklyRecord.advanceToNextWeek
     };
 
     res.json({
@@ -176,45 +185,69 @@ router.get('/admin', [auth, adminAuth], async (req, res) => {
       }
       userBreakdown.push({
         user: { id: user._id, name: user.name, email: user.email, role: user.role },
+        
+        // Week info
         week: record.week,
-        meals: record.totalMeals,
-        purchases: record.totalPurchases,
-        advancePayments: record.totalAdvancePayments,
-        expense: record.totalExpense,
-        previousAdvance: record.advanceFromPreviousWeek,
-        balance: record.weeklyBalance,
-        carryForwardAdvance: record.advanceToNextWeek,
-        advanceBalance: record.advanceToNextWeek, // for UI compatibility
+        weekStart: moment(record.weekStart).format('MMM DD'),
+        weekEnd: moment(record.weekEnd).format('MMM DD'),
+        
+        // Weekly data (starts from 0 each week)
+        totalMeals: record.totalMeals, // Total meal count for this week
+        totalPurchases: record.totalPurchases, // Total purchase within the week
+        totalAdvancePayments: record.totalAdvancePayments, // Advance payments added this week
+        totalExpense: record.totalExpense, // Total meal cost for this week
+        
+        // Advance Balance calculation
+        previousAdvance: record.advanceFromPreviousWeek, // Previous carry forward advance
+        advanceBalance: record.advanceBalance, // Total advance available
+        
+        // Final Calculation
+        finalCalculation: record.weeklyBalance, // Advance Balance - Meal Cost
         isDue: record.isDue,
         finalAmount: record.finalAmount,
-        status: record.status
+        status: record.status,
+        
+        // Next week carry forward
+        carryForwardAdvance: record.advanceToNextWeek
       });
     }
 
-    const totalMeals = userBreakdown.reduce((s, u) => s + u.meals, 0);
-    const totalPurchases = userBreakdown.reduce((s, u) => s + u.purchases, 0);
-    const totalAdvancePayments = userBreakdown.reduce((s, u) => s + (u.advancePayments || 0), 0);
-    const totalExpense = userBreakdown.reduce((s, u) => s + u.expense, 0);
+    // Calculate weekly totals from all users
+    const totalMeals = userBreakdown.reduce((s, u) => s + u.totalMeals, 0);
+    const totalPurchases = userBreakdown.reduce((s, u) => s + u.totalPurchases, 0);
+    const totalAdvancePayments = userBreakdown.reduce((s, u) => s + u.totalAdvancePayments, 0);
+    const totalExpense = userBreakdown.reduce((s, u) => s + u.totalExpense, 0);
+    const totalAdvanceBalance = userBreakdown.reduce((s, u) => s + u.advanceBalance, 0);
     const totalCredit = userBreakdown.filter(u => !u.isDue).reduce((s, u) => s + u.finalAmount, 0);
     const totalDue = userBreakdown.filter(u => u.isDue).reduce((s, u) => s + u.finalAmount, 0);
+    const totalCarryForward = userBreakdown.reduce((s, u) => s + u.carryForwardAdvance, 0);
 
     res.json({
-      systemStats: {
+      // Weekly totals breakdown for admin
+      weeklyTotals: {
+        week: `Week ${targetWeekInfo.week}`,
+        weekRange: `${moment(targetWeekInfo.weekStart).format('MMM DD')} - ${moment(targetWeekInfo.weekEnd).format('MMM DD')}`,
+        monthYear: moment().year(targetYear).month(targetMonth - 1).format('MMMM YYYY'),
+        
+        // All totals for this week
         totalUsers: users.length,
         totalMeals,
         totalPurchases,
         totalAdvancePayments,
         totalExpense,
+        totalAdvanceBalance,
         totalCredit,
         totalDue,
-        netBalance: totalCredit - totalDue,
-        week: `Week ${targetWeekInfo.week}`,
-        weekRange: `${moment(targetWeekInfo.weekStart).format('MMM DD')} - ${moment(targetWeekInfo.weekEnd).format('MMM DD')}`,
-        monthYear: moment().year(targetYear).month(targetMonth - 1).format('MMMM YYYY'),
-        calculationMethod: 'Weekly Reset System'
+        totalCarryForward,
+        netBalance: totalCredit - totalDue
       },
-      userBreakdown: userBreakdown.sort((a, b) => b.balance - a.balance),
-      weeksInMonth: monthWeeks.length
+      
+      // User breakdown for this week
+      userBreakdown: userBreakdown.sort((a, b) => b.finalCalculation - a.finalCalculation),
+      
+      // Additional info
+      weeksInMonth: monthWeeks.length,
+      calculationMethod: 'Weekly Reset System'
     });
   } catch (error) {
     console.error('Admin dashboard error:', error);

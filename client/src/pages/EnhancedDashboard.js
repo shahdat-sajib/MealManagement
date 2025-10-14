@@ -153,8 +153,8 @@ const EnhancedDashboard = () => {
         </div>
       )}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-6">
+      {/* Summary Cards - Clear Weekly Display */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <div className="card">
           <div className="flex items-center">
             <div className="p-2 bg-primary-100 rounded-lg">
@@ -163,6 +163,7 @@ const EnhancedDashboard = () => {
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Total Meals</p>
               <p className="text-2xl font-bold text-gray-900">{summary?.totalMeals || 0}</p>
+              <p className="text-xs text-gray-500">This week</p>
             </div>
           </div>
         </div>
@@ -175,18 +176,7 @@ const EnhancedDashboard = () => {
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Total Purchases</p>
               <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary?.totalPurchases || 0)}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <span className="text-2xl">💳</span>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Advance Payments</p>
-              <p className="text-2xl font-bold text-blue-600">{formatCurrency(summary?.totalAdvancePayments || 0)}</p>
+              <p className="text-xs text-gray-500">Within the week</p>
             </div>
           </div>
         </div>
@@ -197,8 +187,9 @@ const EnhancedDashboard = () => {
               <span className="text-2xl">📊</span>
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Expenses</p>
+              <p className="text-sm font-medium text-gray-600">Total Meal Cost</p>
               <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary?.totalExpense || 0)}</p>
+              <p className="text-xs text-gray-500">This week</p>
             </div>
           </div>
         </div>
@@ -213,34 +204,22 @@ const EnhancedDashboard = () => {
               <p className="text-2xl font-bold text-purple-600">
                 {formatCurrency(summary?.advanceBalance || 0)}
               </p>
+              <p className="text-xs text-gray-500">Previous + Payments + Purchases</p>
             </div>
           </div>
         </div>
 
         <div className="card">
           <div className="flex items-center">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <span className="text-2xl">⬆️</span>
+            <div className={`p-2 rounded-lg ${summary?.isDue ? 'bg-red-100' : 'bg-green-100'}`}>
+              <span className="text-2xl">{summary?.isDue ? '❌' : '✅'}</span>
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Advance Generated</p>
-              <p className="text-2xl font-bold text-green-600">
-                {formatCurrency(summary?.totalAdvanceGenerated || 0)}
+              <p className="text-sm font-medium text-gray-600">Final Calculation</p>
+              <p className={`text-2xl font-bold ${summary?.isDue ? 'text-red-600' : 'text-green-600'}`}>
+                {formatCurrency(summary?.finalAmount || 0)} {summary?.isDue ? 'Due' : 'Credit'}
               </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <span className="text-2xl">⬇️</span>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Advance Used</p>
-              <p className="text-2xl font-bold text-orange-600">
-                {formatCurrency(summary?.totalAdvanceReceived || 0)}
-              </p>
+              <p className="text-xs text-gray-500">Advance Balance - Meal Cost</p>
             </div>
           </div>
         </div>
@@ -298,7 +277,7 @@ const EnhancedDashboard = () => {
                   Period
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Meals
+                  Meals Count
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Purchases
@@ -307,19 +286,19 @@ const EnhancedDashboard = () => {
                   Advance Payments
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Expenses
+                  Meal Cost
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Advance From Previous
+                  Previous Advance
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Advance Via Purchase
+                  Advance Balance
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Weekly Balance
+                  Final Calculation
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
+                  Carry Forward
                 </th>
               </tr>
             </thead>
@@ -334,38 +313,30 @@ const EnhancedDashboard = () => {
                       {week.startDate} - {week.endDate}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {week.meals}
+                      {week.meals || 0}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatCurrency(week.purchases)}
+                      {formatCurrency(week.purchases || 0)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">
                       {formatCurrency(week.advancePayments || 0)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatCurrency(week.expense)}
+                      {formatCurrency(week.expense || 0)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-purple-600">
                       {formatCurrency(week.advanceFromPrevious || 0)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">
-                      {formatCurrency(week.advanceViaPurchase || 0)}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-orange-600 font-medium">
+                      {formatCurrency((week.advanceFromPrevious || 0) + (week.advancePayments || 0) + (week.purchases || 0))}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold">
                       <span className={week.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
-                        {formatCurrency(Math.abs(week.balance))} {week.balance >= 0 ? 'Cr' : 'Due'}
+                        {formatCurrency(week.amount || Math.abs(week.balance || 0))} {week.balance >= 0 ? 'Credit' : 'Due'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        week.isDue 
-                          ? 'bg-red-100 text-red-800' 
-                          : week.balance > 0
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {week.balance > 0 ? 'Credit' : (week.isDue ? 'Due' : 'Balanced')}
-                      </span>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">
+                      {formatCurrency(week.balance > 0 ? (week.amount || Math.abs(week.balance)) : 0)}
                     </td>
                   </tr>
                 ))

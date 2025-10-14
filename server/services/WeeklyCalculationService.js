@@ -160,25 +160,20 @@ class WeeklyCalculationService {
       // Get advance from previous week (includes both purchase-based and advance payment based)
       const previousWeekBalance = await this.getPreviousWeekAdvance(userId, weekInfo);
       
-      // Calculate weekly balance including advance payments
-  // Weekly balance consumption order explanation:
-  // 1. Previous week's carried advance (credit only) is available first.
-  // 2. Current week purchases and advance payments add to available funds.
-  // 3. Expenses subtract from the total available.
-  // Formula: weeklyBalance = (previousAdvance + purchases + advancePayments) - expense.
-  // Example: Week1 credit 108 -> Week2 previousAdvance=108, purchases=0, advancePayments=0, expense=152 => weeklyBalance = 108 - 152 = -44 (Due 44).
-  const weeklyBalance = previousWeekBalance.advanceFromPreviousWeek + totalPurchases + totalAdvancePayments - userTotalExpense;
-      const isDue = weeklyBalance < 0;
-      const finalAmount = Math.abs(weeklyBalance);
+      // CLEAR WEEKLY CALCULATION LOGIC:
+      // 1. Each week starts fresh (meal count, meal cost calculated from 0)
+      // 2. Advance Balance = Previous week carry forward + Current week advance payments + Current week purchases
+      // 3. Final Calculation = Advance Balance - Meal Cost
+      // 4. If Final > 0 = Credit (carry forward to next week)
+      // 5. If Final < 0 = Due (no carry forward)
       
-      // Determine advance for next week (only if positive balance)
-      const advanceToNextWeek = weeklyBalance > 0 ? weeklyBalance : 0;
+      const previousAdvance = previousWeekBalance.advanceFromPreviousWeek;
+      const advanceBalance = previousAdvance + totalAdvancePayments + totalPurchases;
+      const finalCalculation = advanceBalance - userTotalExpense;
       
-      // Calculate advance generated via purchases (excluding advance payments)
-      const advanceViaPurchase = totalPurchases > userTotalExpense ? (totalPurchases - userTotalExpense) : 0;
-      
-      // Calculate advance from advance payments (if any remain after covering expenses)
-      const advanceViaPayments = totalAdvancePayments;
+      const isDue = finalCalculation < 0;
+      const finalAmount = Math.abs(finalCalculation);
+      const advanceToNextWeek = finalCalculation > 0 ? finalCalculation : 0;
       
       return {
         user: userId,
@@ -187,18 +182,23 @@ class WeeklyCalculationService {
         week,
         weekStart,
         weekEnd,
+        
+        // Week data (starts from 0 each week)
         totalMeals,
         totalPurchases,
         totalAdvancePayments,
-        totalExpense: userTotalExpense,
-        weeklyBalance,
-        advanceFromPreviousWeek: previousWeekBalance.advanceFromPreviousWeek,
-        advanceViaPurchase,
-        advanceViaPayments,
-        advanceToNextWeek,
+        totalExpense: userTotalExpense, // This week's meal cost
+        
+        // Advance calculation
+        advanceFromPreviousWeek: previousAdvance,
+        advanceBalance, // Total advance available this week
+        weeklyBalance: finalCalculation, // Final calculation result
+        advanceToNextWeek, // Carry forward to next week
+        
+        // Status
         isDue,
         finalAmount,
-        status: isDue ? 'Due' : (weeklyBalance > 0 ? 'Credit' : 'Balanced'),
+        status: isDue ? 'Due' : (finalCalculation > 0 ? 'Credit' : 'Balanced'),
         calculatedAt: new Date(),
         recalculated: true
       };
