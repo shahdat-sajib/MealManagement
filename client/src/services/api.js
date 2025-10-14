@@ -125,7 +125,13 @@ export const dashboardApi = {
   getHistory: (params = {}) => apiCall('GET', `/dashboard/history?${new URLSearchParams(params)}`),
   
   // Get users with dynamic advance balance (Admin only)
-  getUsersWithBalance: () => apiCall('GET', '/dashboard/users-with-balance')
+  getUsersWithBalance: () => apiCall('GET', '/dashboard/users-with-balance'),
+  
+  // Clear user due manually (Admin only)
+  clearUserDue: (data) => apiCall('POST', '/dashboard/clear-due', data),
+  
+  // Get user's payment history
+  getMyPayments: () => apiCall('GET', '/dashboard/my-payments')
 };
 
 // Calculation API

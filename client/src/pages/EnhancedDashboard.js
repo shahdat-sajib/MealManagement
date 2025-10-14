@@ -9,10 +9,12 @@ const EnhancedDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthYear());
   const [systemStats, setSystemStats] = useState(null);
+  const [paymentHistory, setPaymentHistory] = useState([]);
 
   useEffect(() => {
     fetchDashboardData();
     fetchSystemStats();
+    fetchPaymentHistory();
   }, [selectedMonth]);
 
   const fetchDashboardData = async () => {
@@ -35,6 +37,17 @@ const EnhancedDashboard = () => {
     const result = await calculationApi.getSystemStats();
     if (result.success) {
       setSystemStats(result.data);
+    }
+  };
+
+  const fetchPaymentHistory = async () => {
+    try {
+      const result = await dashboardApi.getMyPayments();
+      if (result.success) {
+        setPaymentHistory(result.data);
+      }
+    } catch (error) {
+      console.error('Error fetching payment history:', error);
     }
   };
 
@@ -375,6 +388,80 @@ const EnhancedDashboard = () => {
               <li>• Historical data recalculated from beginning</li>
             </ul>
           </div>
+        </div>
+      </div>
+
+      {/* Payment History */}
+      <div className="card">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">My Payment History</h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Date
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Type
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Amount
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Notes
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Added By
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {paymentHistory.length > 0 ? (
+                paymentHistory.map((payment, index) => (
+                  <tr key={index} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {formatDateForDisplay(payment.date)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        payment.paymentType === 'due_clearance' 
+                          ? 'bg-blue-100 text-blue-800' 
+                          : payment.paymentType === 'deduction'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {payment.paymentType === 'due_clearance' ? '💰 Due Cleared' : 
+                         payment.paymentType === 'deduction' ? '❌ Deduction' : 
+                         '💳 Advance Payment'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <span className={payment.amount >= 0 ? 'text-green-600' : 'text-red-600'}>
+                        {formatCurrency(Math.abs(payment.amount))}
+                        {payment.paymentType === 'due_clearance' && payment.clearedDueAmount > 0 && (
+                          <span className="text-xs text-gray-500 ml-1">
+                            (cleared ${payment.clearedDueAmount.toFixed(2)} due)
+                          </span>
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {payment.notes || 'No notes'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {payment.addedBy}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
+                    No payment history found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

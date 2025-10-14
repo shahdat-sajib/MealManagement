@@ -18,6 +18,16 @@ const AdvancePaymentManager = () => {
     currentBalance: 0,
     amount: ''
   });
+  
+  const [dueClearanceModal, setDueClearanceModal] = useState({
+    show: false,
+    userId: '',
+    userName: '',
+    dueAmount: 0,
+    paymentAmount: '',
+    paymentDate: new Date().toISOString().split('T')[0],
+    notes: ''
+  });
 
   useEffect(() => {
     fetchUsers();
@@ -172,6 +182,71 @@ const AdvancePaymentManager = () => {
     }
   };
 
+  const handleClearDue = (user) => {
+    if (!user.isDue || user.dueAmount <= 0) {
+      toast.error('User has no due amount to clear');
+      return;
+    }
+
+    setDueClearanceModal({
+      show: true,
+      userId: user._id,
+      userName: user.name,
+      dueAmount: user.dueAmount,
+      paymentAmount: user.dueAmount.toFixed(2),
+      paymentDate: new Date().toISOString().split('T')[0],
+      notes: `Manual payment received by ${user.name} - Due clearance`
+    });
+  };
+
+  const handleDueClearanceSubmit = async () => {
+    const { userId, userName, dueAmount, paymentAmount, paymentDate, notes } = dueClearanceModal;
+    const amount = parseFloat(paymentAmount);
+    
+    if (!amount || amount <= 0) {
+      toast.error('Please enter a valid payment amount');
+      return;
+    }
+
+    if (!paymentDate) {
+      toast.error('Please select payment date');
+      return;
+    }
+
+    try {
+      const clearanceData = {
+        userId,
+        dueAmount,
+        paymentAmount: amount,
+        paymentDate,
+        notes
+      };
+
+      console.log('🔗 Clearing due with data:', clearanceData);
+      const response = await dashboardApi.clearUserDue(clearanceData);
+
+      if (response.success) {
+        toast.success(`Due cleared for ${userName}! Payment of $${amount.toFixed(2)} recorded.`);
+        setDueClearanceModal({
+          show: false,
+          userId: '',
+          userName: '',
+          dueAmount: 0,
+          paymentAmount: '',
+          paymentDate: new Date().toISOString().split('T')[0],
+          notes: ''
+        });
+        fetchUsers();
+        fetchPayments();
+      } else {
+        toast.error(response.error || 'Failed to clear due');
+      }
+    } catch (error) {
+      console.error('Error clearing due:', error);
+      toast.error('Failed to clear due');
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -262,6 +337,9 @@ const AdvancePaymentManager = () => {
                   Advance Balance
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Due Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -293,6 +371,17 @@ const AdvancePaymentManager = () => {
                       ${(user.advanceBalance || 0).toFixed(2)}
                     </span>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {user.isDue ? (
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                        Due: ${(user.dueAmount || 0).toFixed(2)}
+                      </span>
+                    ) : (
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                        No Due
+                      </span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex space-x-2">
                       {(user.advanceBalance || 0) > 0 && (
@@ -312,6 +401,15 @@ const AdvancePaymentManager = () => {
                             Clear
                           </button>
                         </>
+                      )}
+                      {user.isDue && (user.dueAmount || 0) > 0 && (
+                        <button
+                          onClick={() => handleClearDue(user)}
+                          className="text-blue-600 hover:text-blue-900 text-xs"
+                          title="Clear Due Manually"
+                        >
+                          Clear Due
+                        </button>
                       )}
                     </div>
                   </td>
@@ -356,6 +454,90 @@ const AdvancePaymentManager = () => {
                 </button>
                 <button
                   onClick={() => setDeductionModal({ show: false, userId: '', userName: '', currentBalance: 0, amount: '' })}
+                  className="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md w-24 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {dueClearanceModal.show && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3 text-center">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">
+                Clear Due Manually
+              </h3>
+              <div className="mt-2 px-7 py-3">
+                <p className="text-sm text-gray-500 mb-4">
+                  Clear due for <strong>{dueClearanceModal.userName}</strong>
+                </p>
+                <p className="text-sm text-red-600 mb-4">
+                  Current Due: <strong>${dueClearanceModal.dueAmount.toFixed(2)}</strong>
+                </p>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Payment Amount ($)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={dueClearanceModal.paymentAmount}
+                      onChange={(e) => setDueClearanceModal({ ...dueClearanceModal, paymentAmount: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Amount paid by user"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Payment Date
+                    </label>
+                    <input
+                      type="date"
+                      value={dueClearanceModal.paymentDate}
+                      onChange={(e) => setDueClearanceModal({ ...dueClearanceModal, paymentDate: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Notes
+                    </label>
+                    <textarea
+                      value={dueClearanceModal.notes}
+                      onChange={(e) => setDueClearanceModal({ ...dueClearanceModal, notes: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      rows="2"
+                      placeholder="Payment details..."
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="items-center px-4 py-3">
+                <button
+                  onClick={handleDueClearanceSubmit}
+                  className="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-24 mr-2 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                >
+                  Clear Due
+                </button>
+                <button
+                  onClick={() => setDueClearanceModal({
+                    show: false,
+                    userId: '',
+                    userName: '',
+                    dueAmount: 0,
+                    paymentAmount: '',
+                    paymentDate: new Date().toISOString().split('T')[0],
+                    notes: ''
+                  })}
                   className="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md w-24 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-300"
                 >
                   Cancel

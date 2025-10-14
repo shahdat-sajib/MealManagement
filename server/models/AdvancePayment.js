@@ -22,6 +22,15 @@ const advancePaymentSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
+  },
+  paymentType: {
+    type: String,
+    enum: ['advance', 'due_clearance', 'deduction'],
+    default: 'advance'
+  },
+  clearedDueAmount: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true

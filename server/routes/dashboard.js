@@ -451,7 +451,7 @@ router.get('/admin/enhanced', [auth, adminAuth], async (req, res) => {
   }
 });
 
-// Get users with dynamic advance balance for advance payment management
+// Get users with dynamic advance balance and due status for payment management
 router.get('/users-with-balance', [auth, adminAuth], async (req, res) => {
   try {
     const users = await User.find({}).select('name email role');
@@ -461,12 +461,22 @@ router.get('/users-with-balance', [auth, adminAuth], async (req, res) => {
       // Get current dynamic advance balance
       const advanceBalance = await WeeklyCalculationService.getCurrentUserAdvanceBalance(user._id);
       
+      // Get latest weekly balance to check if user has due
+      const latestWeeklyBalance = await WeeklyBalance.findOne({
+        user: user._id
+      }).sort({ year: -1, month: -1, week: -1 });
+      
+      const isDue = latestWeeklyBalance ? latestWeeklyBalance.isDue : false;
+      const dueAmount = (latestWeeklyBalance && latestWeeklyBalance.isDue) ? latestWeeklyBalance.finalAmount : 0;
+      
       usersWithBalance.push({
         _id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
-        advanceBalance // Dynamic balance from weekly calculation
+        advanceBalance, // Dynamic balance from weekly calculation
+        isDue,
+        dueAmount
       });
     }
     
@@ -475,6 +485,85 @@ router.get('/users-with-balance', [auth, adminAuth], async (req, res) => {
   } catch (error) {
     console.error('Error getting users with balance:', error);
     res.status(500).json({ message: 'Server error getting users with balance' });
+  }
+});
+
+// Manual due clearance by admin
+router.post('/clear-due', [auth, adminAuth], async (req, res) => {
+  try {
+    const { userId, dueAmount, paymentAmount, paymentDate, notes } = req.body;
+    
+    if (!userId || !dueAmount || !paymentAmount || !paymentDate) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+    
+    if (paymentAmount <= 0) {
+      return res.status(400).json({ message: 'Payment amount must be positive' });
+    }
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Create advance payment record for manual due clearance
+    const AdvancePayment = require('../models/AdvancePayment');
+    const clearancePayment = new AdvancePayment({
+      user: userId,
+      amount: paymentAmount,
+      date: new Date(paymentDate),
+      notes: notes || `Manual due clearance by admin - Due amount: $${dueAmount.toFixed(2)}`,
+      addedBy: req.user._id,
+      paymentType: 'due_clearance',
+      clearedDueAmount: dueAmount
+    });
+    
+    await clearancePayment.save();
+    
+    // Trigger recalculation from the payment date
+    await WeeklyCalculationService.recalculateFromAdvancePaymentDate(userId, new Date(paymentDate));
+    
+    console.log(`✅ Admin ${req.user.name} cleared due for user ${user.name}: $${dueAmount} with payment $${paymentAmount}`);
+    
+    res.json({
+      message: `Due cleared successfully for ${user.name}`,
+      payment: clearancePayment,
+      clearedDueAmount: dueAmount,
+      paymentAmount: paymentAmount
+    });
+    
+  } catch (error) {
+    console.error('❌ Error clearing due:', error);
+    res.status(500).json({ message: 'Server error clearing due' });
+  }
+});
+
+// Get user's payment history including due clearances
+router.get('/my-payments', auth, async (req, res) => {
+  try {
+    const AdvancePayment = require('../models/AdvancePayment');
+    
+    const payments = await AdvancePayment.find({ user: req.user._id })
+      .populate('addedBy', 'name')
+      .sort({ date: -1 })
+      .limit(50);
+    
+    const formattedPayments = payments.map(payment => ({
+      _id: payment._id,
+      amount: payment.amount,
+      date: payment.date,
+      notes: payment.notes,
+      paymentType: payment.paymentType || 'advance',
+      clearedDueAmount: payment.clearedDueAmount || 0,
+      addedBy: payment.addedBy ? payment.addedBy.name : 'System',
+      createdAt: payment.createdAt
+    }));
+    
+    res.json(formattedPayments);
+    
+  } catch (error) {
+    console.error('Error getting user payments:', error);
+    res.status(500).json({ message: 'Server error getting payment history' });
   }
 });
 
