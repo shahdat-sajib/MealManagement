@@ -3,6 +3,8 @@ const router = express.Router();
 const AdvancePayment = require('../models/AdvancePayment');
 const User = require('../models/User');
 const { adminAuth } = require('../middleware/adminAuth');
+const WeeklyCalculationService = require('../services/WeeklyCalculationService');
+const moment = require('moment');
 
 // Get all advance payments
 router.get('/', adminAuth, async (req, res) => {
@@ -49,14 +51,16 @@ router.post('/', adminAuth, async (req, res) => {
 
     await advancePayment.save();
 
-    // Update user's advance balance (allow negative amounts for deductions)
-    const currentBalance = user.advanceBalance || 0;
-    const newBalance = Math.max(0, currentBalance + numericAmount);
-    user.advanceBalance = newBalance;
-    
-    console.log(`Balance update: ${user.name} - Current: $${currentBalance}, Change: $${numericAmount}, New: $${newBalance}`);
-    
-    await user.save();
+    console.log(`💰 Advance payment added: ${user.name} - Amount: $${numericAmount}`);
+
+    // Trigger recalculation from the week when this advance payment was added
+    try {
+      await WeeklyCalculationService.recalculateFromAdvancePaymentDate(userId, advancePayment.date);
+      console.log(`✅ Weekly balances recalculated for ${user.name} from ${moment(advancePayment.date).format('YYYY-MM-DD')}`);
+    } catch (calcError) {
+      console.error('❌ Error recalculating weekly balances:', calcError);
+      // Don't fail the advance payment creation, but log the error
+    }
 
     // Populate the response
     await advancePayment.populate('user', 'name email');
@@ -106,14 +110,18 @@ router.delete('/:paymentId', adminAuth, async (req, res) => {
       return res.status(404).json({ message: 'Payment not found' });
     }
 
-    // Update user's advance balance
-    const user = await User.findById(payment.user);
-    if (user) {
-      user.advanceBalance = Math.max(0, user.advanceBalance - payment.amount);
-      await user.save();
-    }
+    const paymentDate = payment.date;
+    const paymentUserId = payment.user;
 
     await AdvancePayment.findByIdAndDelete(paymentId);
+
+    // Trigger recalculation from the week when this advance payment was removed
+    try {
+      await WeeklyCalculationService.recalculateFromAdvancePaymentDate(paymentUserId, paymentDate);
+      console.log(`✅ Weekly balances recalculated after deleting advance payment from ${moment(paymentDate).format('YYYY-MM-DD')}`);
+    } catch (calcError) {
+      console.error('❌ Error recalculating weekly balances after deletion:', calcError);
+    }
 
     res.json({ message: 'Advance payment deleted successfully' });
   } catch (error) {

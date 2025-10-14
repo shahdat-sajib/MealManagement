@@ -27,6 +27,37 @@ router.post('/recalculate-all', [auth, adminAuth], async (req, res) => {
   }
 });
 
+// Recalculate for specific user from specific date (Admin only)
+router.post('/recalculate-user', [auth, adminAuth], async (req, res) => {
+  try {
+    const { userId, fromDate } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+    
+    const targetDate = fromDate ? new Date(fromDate) : new Date();
+    
+    console.log(`🔄 Admin requested recalculation for user ${userId} from ${targetDate}`);
+    
+    const result = await WeeklyCalculationService.recalculateFromAdvancePaymentDate(userId, targetDate);
+    
+    res.json({
+      message: 'User weekly balances recalculated successfully',
+      weeksRecalculated: result.weeksRecalculated,
+      fromDate: targetDate,
+      timestamp: new Date()
+    });
+    
+  } catch (error) {
+    console.error('❌ User recalculation error:', error);
+    res.status(500).json({ 
+      message: 'Error recalculating user weekly balances',
+      error: error.message 
+    });
+  }
+});
+
 // Get system statistics (Admin only)
 router.get('/system-stats', [auth, adminAuth], async (req, res) => {
   try {

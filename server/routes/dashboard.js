@@ -519,9 +519,8 @@ router.get('/weekly', auth, async (req, res) => {
       totalAdvanceFromPayments: 0
     });
     
-    // Get user's advance balance
-    const user = await User.findById(req.user._id);
-    const advanceBalance = user.advanceBalance || 0;
+    // Calculate current advance balance from weekly system
+    const advanceBalance = await WeeklyCalculationService.getCurrentUserAdvanceBalance(req.user._id);
     
     res.json({
       summary: {

@@ -252,6 +252,71 @@ class WeeklyCalculationService {
   }
   
   /**
+   * Recalculate weekly balances from a specific advance payment date
+   */
+  static async recalculateFromAdvancePaymentDate(userId, advancePaymentDate) {
+    try {
+      console.log(`🔄 Recalculating weekly balances for user ${userId} from ${moment(advancePaymentDate).format('YYYY-MM-DD')}`);
+      
+      // Find which week this advance payment falls into
+      const paymentMoment = moment(advancePaymentDate);
+      const year = paymentMoment.year();
+      const month = paymentMoment.month(); // 0-based
+      
+      const monthWeeks = this.getWeekBoundaries(paymentMoment.toDate());
+      const targetWeek = monthWeeks.find(week => 
+        paymentMoment.isBetween(moment(week.weekStart), moment(week.weekEnd), null, '[]')
+      );
+      
+      if (!targetWeek) {
+        console.log('❌ Could not determine week for advance payment date');
+        return;
+      }
+      
+      console.log(`📅 Advance payment falls in Week ${targetWeek.week} of ${paymentMoment.format('MMMM YYYY')}`);
+      
+      // Get all weeks from the target week onwards
+      const allWeeks = await this.getAllWeeksInSystem();
+      const targetWeekStart = moment(targetWeek.weekStart);
+      
+      const weeksToRecalculate = allWeeks.filter(week => 
+        moment(week.weekStart).isSameOrAfter(targetWeekStart)
+      );
+      
+      console.log(`🔄 Recalculating ${weeksToRecalculate.length} weeks starting from Week ${targetWeek.week}`);
+      
+      // Recalculate each week from the target week onwards
+      for (const weekInfo of weeksToRecalculate) {
+        try {
+          const weeklyBalanceData = await this.calculateWeeklyBalance(userId, weekInfo);
+          
+          // Save or update weekly balance
+          await WeeklyBalance.findOneAndUpdate(
+            {
+              user: userId,
+              year: weekInfo.year,
+              month: weekInfo.month,
+              week: weekInfo.week
+            },
+            weeklyBalanceData,
+            { upsert: true, new: true }
+          );
+          
+        } catch (error) {
+          console.error(`❌ Error recalculating week ${weekInfo.week} of ${weekInfo.month}/${weekInfo.year}:`, error);
+        }
+      }
+      
+      console.log(`✅ Recalculation complete for user ${userId}`);
+      return { success: true, weeksRecalculated: weeksToRecalculate.length };
+      
+    } catch (error) {
+      console.error('❌ Error in advance payment recalculation:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Recalculate all weekly balances from the beginning
    */
   static async recalculateAllWeeksFromBeginning() {
@@ -343,6 +408,29 @@ class WeeklyCalculationService {
     }
   }
   
+  /**
+   * Get current user's advance balance from latest weekly calculation
+   */
+  static async getCurrentUserAdvanceBalance(userId) {
+    try {
+      // Get the latest weekly balance record for this user
+      const latestWeeklyBalance = await WeeklyBalance.findOne({
+        user: userId
+      }).sort({ year: -1, month: -1, week: -1 });
+      
+      if (!latestWeeklyBalance) {
+        return 0;
+      }
+      
+      // Return the advance that would carry to next week
+      return latestWeeklyBalance.advanceToNextWeek || 0;
+      
+    } catch (error) {
+      console.error('Error getting current user advance balance:', error);
+      return 0;
+    }
+  }
+
   /**
    * Get admin dashboard data with comprehensive meal tracking
    */
