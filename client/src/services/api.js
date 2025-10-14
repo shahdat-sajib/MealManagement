@@ -122,7 +122,10 @@ export const dashboardApi = {
   getEnhancedAdminDashboard: (params = {}) => apiCall('GET', `/dashboard/admin/enhanced?${new URLSearchParams(params)}`),
   
   // Get expense history
-  getHistory: (params = {}) => apiCall('GET', `/dashboard/history?${new URLSearchParams(params)}`)
+  getHistory: (params = {}) => apiCall('GET', `/dashboard/history?${new URLSearchParams(params)}`),
+  
+  // Get users with dynamic advance balance (Admin only)
+  getUsersWithBalance: () => apiCall('GET', '/dashboard/users-with-balance')
 };
 
 // Calculation API

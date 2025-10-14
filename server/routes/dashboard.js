@@ -451,4 +451,31 @@ router.get('/admin/enhanced', [auth, adminAuth], async (req, res) => {
   }
 });
 
+// Get users with dynamic advance balance for advance payment management
+router.get('/users-with-balance', [auth, adminAuth], async (req, res) => {
+  try {
+    const users = await User.find({}).select('name email role');
+    const usersWithBalance = [];
+    
+    for (const user of users) {
+      // Get current dynamic advance balance
+      const advanceBalance = await WeeklyCalculationService.getCurrentUserAdvanceBalance(user._id);
+      
+      usersWithBalance.push({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        advanceBalance // Dynamic balance from weekly calculation
+      });
+    }
+    
+    res.json(usersWithBalance);
+    
+  } catch (error) {
+    console.error('Error getting users with balance:', error);
+    res.status(500).json({ message: 'Server error getting users with balance' });
+  }
+});
+
 module.exports = router;

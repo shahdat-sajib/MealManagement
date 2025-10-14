@@ -194,30 +194,30 @@ const WeeklyAdminDashboard = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {user.totalMeals}
+                      {user.totalMeals || 0}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatCurrency(user.totalPurchases)}
+                      {formatCurrency(user.totalPurchases || 0)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">
-                      {formatCurrency(user.totalAdvancePayments)}
+                      {formatCurrency(user.totalAdvancePayments || 0)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatCurrency(user.totalExpense)}
+                      {formatCurrency(user.totalExpense || 0)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-purple-600">
-                      {formatCurrency(user.previousAdvance)}
+                      {formatCurrency(user.previousAdvance || 0)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-orange-600 font-medium">
-                      {formatCurrency(user.advanceBalance)}
+                      {formatCurrency(user.advanceBalance || 0)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-bold">
-                      <span className={user.finalCalculation >= 0 ? 'text-green-600' : 'text-red-600'}>
-                        {formatCurrency(user.finalAmount)} {user.finalCalculation >= 0 ? 'Credit' : 'Due'}
+                      <span className={(user.finalCalculation || 0) >= 0 ? 'text-green-600' : 'text-red-600'}>
+                        {formatCurrency(user.finalAmount || 0)} {(user.finalCalculation || 0) >= 0 ? 'Credit' : 'Due'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">
-                      {formatCurrency(user.carryForwardAdvance)}
+                      {formatCurrency(user.carryForwardAdvance || 0)}
                     </td>
                   </tr>
                 ))

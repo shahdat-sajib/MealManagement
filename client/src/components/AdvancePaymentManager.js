@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { usersApi, advancePaymentsApi } from '../services/api';
+import { usersApi, advancePaymentsApi, dashboardApi } from '../services/api';
 
 const AdvancePaymentManager = () => {
   const [users, setUsers] = useState([]);
@@ -26,7 +26,7 @@ const AdvancePaymentManager = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await usersApi.getUsers();
+      const response = await dashboardApi.getUsersWithBalance();
       if (response.success) {
         setUsers(response.data);
       } else {
