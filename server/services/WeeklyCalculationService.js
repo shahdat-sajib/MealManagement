@@ -161,7 +161,13 @@ class WeeklyCalculationService {
       const previousWeekBalance = await this.getPreviousWeekAdvance(userId, weekInfo);
       
       // Calculate weekly balance including advance payments
-      const weeklyBalance = totalPurchases + totalAdvancePayments - userTotalExpense + previousWeekBalance.advanceFromPreviousWeek;
+  // Weekly balance consumption order explanation:
+  // 1. Previous week's carried advance (credit only) is available first.
+  // 2. Current week purchases and advance payments add to available funds.
+  // 3. Expenses subtract from the total available.
+  // Formula: weeklyBalance = (previousAdvance + purchases + advancePayments) - expense.
+  // Example: Week1 credit 108 -> Week2 previousAdvance=108, purchases=0, advancePayments=0, expense=152 => weeklyBalance = 108 - 152 = -44 (Due 44).
+  const weeklyBalance = previousWeekBalance.advanceFromPreviousWeek + totalPurchases + totalAdvancePayments - userTotalExpense;
       const isDue = weeklyBalance < 0;
       const finalAmount = Math.abs(weeklyBalance);
       

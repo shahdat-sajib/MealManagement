@@ -13,232 +13,122 @@ const router = express.Router();
 // Get dashboard data for current user
 router.get('/', auth, async (req, res) => {
   try {
-    const { startDate, endDate, week, month, year } = req.query;
-    let dateFilter = {};
+    const { week, month, year } = req.query;
 
-    if (startDate && endDate) {
-      dateFilter = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
-      };
-    } else if (week) {
-      // Get specific week of current month (calendar-based weeks)
-      const weekNum = parseInt(week);
-      
-      // Use current month/year if not specified
-      const targetMonth = month ? parseInt(month) - 1 : moment().month(); // moment months are 0-based
-      const targetYear = year ? parseInt(year) : moment().year();
-      
-      const monthStart = moment().year(targetYear).month(targetMonth).date(1).startOf('day');
-      const monthEnd = moment().year(targetYear).month(targetMonth).endOf('month').endOf('day');
-      
-      let start, end;
-      
-      if (weekNum === 1) {
-        // Week 1: 1st to 7th
-        start = monthStart.clone().date(1);
-        end = monthStart.clone().date(7).endOf('day');
-      } else if (weekNum === 2) {
-        // Week 2: 8th to 14th  
-        start = monthStart.clone().date(8);
-        end = monthStart.clone().date(14).endOf('day');
-      } else if (weekNum === 3) {
-        // Week 3: 15th to 21st
-        start = monthStart.clone().date(15);
-        end = monthStart.clone().date(21).endOf('day');
-      } else if (weekNum === 4) {
-        // Week 4: 22nd to end of month
-        start = monthStart.clone().date(22);
-        end = monthEnd.clone();
-      } else {
-        // Invalid week number, default to current week
-        const now = moment();
-        start = now.clone().startOf('week');
-        end = now.clone().endOf('week');
-      }
-      
-      // Ensure we don't go beyond the month boundaries
-      if (end.isAfter(monthEnd)) {
-        end = monthEnd.clone();
-      }
-      
-      dateFilter = { $gte: start.toDate(), $lte: end.toDate() };
+    // Determine target month/year
+    const targetYear = year ? parseInt(year) : moment().year();
+    const targetMonth = month ? parseInt(month) : moment().month() + 1; // 1-based
+
+    // Compute all week boundaries for target month (include week 5 when needed)
+    const monthWeeks = WeeklyCalculationService.getWeekBoundaries(
+      moment().year(targetYear).month(targetMonth - 1).date(1).toDate()
+    );
+
+    // Determine requested week number (fallback: infer current date week)
+    let targetWeekNum;
+    if (week) {
+      targetWeekNum = parseInt(week);
     } else {
-      // Default to current week
-      const start = moment().startOf('week').toDate();
-      const end = moment().endOf('week').toDate();
-      dateFilter = { $gte: start, $lte: end };
+      const today = moment();
+      const foundWeek = monthWeeks.find(w => today.isBetween(moment(w.weekStart), moment(w.weekEnd), null, '[]'));
+      targetWeekNum = foundWeek ? foundWeek.week : monthWeeks[0].week;
     }
 
-    // Get user's meals, purchases, and advance balance
-    const [userMeals, userPurchases, totalMeals, totalPurchases, user] = await Promise.all([
-      Meal.find({ user: req.user._id, date: dateFilter }),
-      Purchase.find({ user: req.user._id, date: dateFilter }),
-      Meal.find({ date: dateFilter }),
-      Purchase.find({ date: dateFilter }),
-      User.findById(req.user._id)
+    const targetWeekInfo = monthWeeks.find(w => w.week === targetWeekNum) || monthWeeks[0];
+
+    // Fetch or calculate the weekly balance for this user & week
+    let weeklyRecord = await WeeklyBalance.findOne({
+      user: req.user._id,
+      year: targetWeekInfo.year,
+      month: targetWeekInfo.month,
+      week: targetWeekInfo.week
+    });
+
+    if (!weeklyRecord) {
+      // On-demand calculation if not present yet
+      const calcData = await WeeklyCalculationService.calculateWeeklyBalance(req.user._id, targetWeekInfo);
+      weeklyRecord = await WeeklyBalance.findOneAndUpdate(
+        { user: req.user._id, year: targetWeekInfo.year, month: targetWeekInfo.month, week: targetWeekInfo.week },
+        calcData,
+        { upsert: true, new: true }
+      );
+    }
+
+    // Build daily breakdown for selected week from raw data (for UI detail view)
+    const [userMeals, userPurchases, allMeals, allPurchases] = await Promise.all([
+      Meal.find({ user: req.user._id, date: { $gte: targetWeekInfo.weekStart, $lte: targetWeekInfo.weekEnd } }),
+      Purchase.find({ user: req.user._id, date: { $gte: targetWeekInfo.weekStart, $lte: targetWeekInfo.weekEnd } }),
+      Meal.find({ date: { $gte: targetWeekInfo.weekStart, $lte: targetWeekInfo.weekEnd } }),
+      Purchase.find({ date: { $gte: targetWeekInfo.weekStart, $lte: targetWeekInfo.weekEnd } })
     ]);
 
-    // Calculate totals
-    const userTotalMeals = userMeals.length;
-    const userTotalPurchases = userPurchases.reduce((sum, purchase) => sum + purchase.amount, 0);
-    const systemTotalMeals = totalMeals.length;
-    const systemTotalPurchases = totalPurchases.reduce((sum, purchase) => sum + purchase.amount, 0);
-    const userAdvanceBalance = user.advanceBalance || 0;
-
-    // Calculate daily expense breakdown
-    const dailyExpenseMap = new Map();
-    
-    // Group meals by date
     const mealsByDate = {};
-    totalMeals.forEach(meal => {
-      const dateKey = moment(meal.date).format('YYYY-MM-DD');
-      if (!mealsByDate[dateKey]) {
-        mealsByDate[dateKey] = [];
-      }
-      mealsByDate[dateKey].push(meal);
+    allMeals.forEach(meal => {
+      const k = moment(meal.date).format('YYYY-MM-DD');
+      mealsByDate[k] = (mealsByDate[k] || 0) + 1;
     });
-
-    // Group purchases by date
     const purchasesByDate = {};
-    totalPurchases.forEach(purchase => {
-      const dateKey = moment(purchase.date).format('YYYY-MM-DD');
-      if (!purchasesByDate[dateKey]) {
-        purchasesByDate[dateKey] = 0;
-      }
-      purchasesByDate[dateKey] += purchase.amount;
+    allPurchases.forEach(p => {
+      const k = moment(p.date).format('YYYY-MM-DD');
+      purchasesByDate[k] = (purchasesByDate[k] || 0) + p.amount;
     });
-
-    // Calculate daily costs
-    let userTotalExpense = 0;
-    const dailyBreakdown = [];
-
-    Object.keys(mealsByDate).forEach(dateKey => {
-      const dayMeals = mealsByDate[dateKey];
-      const dayPurchases = purchasesByDate[dateKey] || 0;
-      const dayMealCount = dayMeals.length;
-      
-      if (dayMealCount > 0) {
-        const dailyCostPerMeal = dayPurchases / dayMealCount;
-        const userMealsThisDay = dayMeals.filter(meal => 
-          meal.user.toString() === req.user._id.toString()
-        ).length;
-        
-        const userDayExpense = userMealsThisDay * dailyCostPerMeal;
-        userTotalExpense += userDayExpense;
-
-        dailyBreakdown.push({
-          date: dateKey,
-          totalMeals: dayMealCount,
-          totalPurchases: dayPurchases,
-          costPerMeal: dailyCostPerMeal,
-          userMeals: userMealsThisDay,
-          userExpense: userDayExpense
-        });
-      }
+    const userMealsByDate = {};
+    userMeals.forEach(m => {
+      const k = moment(m.date).format('YYYY-MM-DD');
+      userMealsByDate[k] = (userMealsByDate[k] || 0) + 1;
     });
+    const dailyBreakdown = Object.keys(userMealsByDate).map(dateKey => {
+      const dayTotalMeals = mealsByDate[dateKey] || 1;
+      const dayTotalPurchases = purchasesByDate[dateKey] || 0;
+      const costPerMeal = dayTotalPurchases / dayTotalMeals;
+      const userMealsCount = userMealsByDate[dateKey];
+      const userExpense = userMealsCount * costPerMeal;
+      return {
+        date: dateKey,
+        totalMeals: dayTotalMeals,
+        totalPurchases: dayTotalPurchases,
+        costPerMeal,
+        userMeals: userMealsCount,
+        userExpense
+      };
+    }).sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    // Calculate final balance including advance payments
-    const rawBalance = userTotalPurchases - userTotalExpense;
-    const balanceWithAdvance = rawBalance + userAdvanceBalance;
-    const isDue = balanceWithAdvance < 0;
-    const finalAmount = Math.abs(balanceWithAdvance);
+    // Monthly weekly breakdown (all weeks for month) via service so carry-forward chain is visible
+    const monthlyWeeklyBreakdown = await WeeklyCalculationService.getUserWeeklyBreakdown(
+      req.user._id,
+      targetYear,
+      targetMonth
+    );
 
-    // Generate weekly breakdown for current month (calendar weeks)
-    const weeklyBreakdown = [];
-    const monthStart = moment().startOf('month');
-    const monthEnd = moment().endOf('month');
-    
-    // Define calendar weeks: 1-7, 8-14, 15-21, 22-end
-    const weeks = [
-      { num: 1, start: 1, end: 7 },
-      { num: 2, start: 8, end: 14 },
-      { num: 3, start: 15, end: 21 },
-      { num: 4, start: 22, end: monthEnd.date() }
-    ];
-    
-    weeks.forEach(({ num, start, end }) => {
-      const weekStart = monthStart.clone().date(start).startOf('day');
-      let weekEnd = monthStart.clone().date(Math.min(end, monthEnd.date())).endOf('day');
-      
-      // Ensure we don't go beyond month end
-      if (weekEnd.isAfter(monthEnd)) {
-        weekEnd = monthEnd.clone();
-      }
-      
-      const weekMeals = userMeals.filter(meal => 
-        moment(meal.date).isBetween(weekStart, weekEnd, null, '[]')
-      );
-      const weekPurchases = userPurchases.filter(purchase =>
-        moment(purchase.date).isBetween(weekStart, weekEnd, null, '[]')
-      );
-      
-      let weekExpense = 0;
-      
-      // Group user's week meals by date to avoid double counting
-      const userMealsByDate = {};
-      weekMeals.forEach(meal => {
-        const dateKey = moment(meal.date).format('YYYY-MM-DD');
-        if (!userMealsByDate[dateKey]) {
-          userMealsByDate[dateKey] = 0;
-        }
-        userMealsByDate[dateKey]++;
-      });
-      
-      // Calculate expense for each day in the week
-      Object.keys(userMealsByDate).forEach(dateKey => {
-        const userMealsOnDay = userMealsByDate[dateKey];
-        const dayTotalMeals = totalMeals.filter(m => 
-          moment(m.date).format('YYYY-MM-DD') === dateKey
-        ).length;
-        const dayTotalPurchases = totalPurchases
-          .filter(p => moment(p.date).format('YYYY-MM-DD') === dateKey)
-          .reduce((sum, p) => sum + p.amount, 0);
-        
-        if (dayTotalMeals > 0) {
-          const dailyCostPerMeal = dayTotalPurchases / dayTotalMeals;
-          weekExpense += userMealsOnDay * dailyCostPerMeal;
-        }
-      });
-      
-      const weekPurchaseTotal = weekPurchases.reduce((sum, p) => sum + p.amount, 0);
-      const weekBalance = weekPurchaseTotal - weekExpense;
-      
-      weeklyBreakdown.push({
-        week: `Week ${num}`,
-        startDate: weekStart.format('MMM DD'),
-        endDate: weekEnd.format('MMM DD'),
-        meals: weekMeals.length,
-        purchases: weekPurchaseTotal,
-        expense: weekExpense,
-        balance: weekBalance,
-        isDue: weekBalance < 0,
-        amount: Math.abs(weekBalance),
-        status: weekBalance < 0 ? 'Due' : 'Credit'
-      });
-    });
-
-    const dashboardData = {
-      summary: {
-        totalMeals: userTotalMeals,
-        totalPurchases: userTotalPurchases,
-        totalExpense: userTotalExpense,
-        advanceBalance: userAdvanceBalance,
-        balance: balanceWithAdvance,
-        isDue: isDue,
-        finalAmount: finalAmount,
-        status: isDue ? 'Due' : 'Credit'
-      },
-      weeklyBreakdown: weeklyBreakdown,
-      dailyBreakdown: dailyBreakdown.sort((a, b) => new Date(b.date) - new Date(a.date)),
-      systemStats: {
-        totalSystemMeals: systemTotalMeals,
-        totalSystemPurchases: systemTotalPurchases,
-        averageCostPerMeal: systemTotalMeals > 0 ? systemTotalPurchases / systemTotalMeals : 0
-      }
+    // Summary reflecting requested week & overall month context
+    const summary = {
+      week: `Week ${weeklyRecord.week}`,
+      weekStart: moment(weeklyRecord.weekStart).format('MMM DD'),
+      weekEnd: moment(weeklyRecord.weekEnd).format('MMM DD'),
+      totalMeals: weeklyRecord.totalMeals,
+      totalPurchases: weeklyRecord.totalPurchases,
+      totalAdvancePayments: weeklyRecord.totalAdvancePayments,
+      totalExpense: weeklyRecord.totalExpense,
+      previousAdvance: weeklyRecord.advanceFromPreviousWeek,
+      weeklyBalance: weeklyRecord.weeklyBalance,
+      carryForwardAdvance: weeklyRecord.advanceToNextWeek,
+      advanceBalance: weeklyRecord.advanceToNextWeek, // for UI compatibility (represents next week's starting advance)
+      isDue: weeklyRecord.isDue,
+      finalAmount: weeklyRecord.finalAmount,
+      status: weeklyRecord.status,
+      monthYear: moment().year(targetYear).month(targetMonth - 1).format('MMMM YYYY')
     };
 
-    res.json(dashboardData);
+    res.json({
+      summary,
+      weeklyBreakdown: monthlyWeeklyBreakdown, // maintains month view
+      dailyBreakdown,
+      systemStats: {
+        calculationMethod: 'Weekly Reset System',
+        advanceSystem: 'Carry-forward Credit/Due',
+        weeksInMonth: monthWeeks.length
+      }
+    });
   } catch (error) {
     console.error('Dashboard error:', error);
     res.status(500).json({ message: 'Server error fetching dashboard data' });
@@ -248,169 +138,84 @@ router.get('/', auth, async (req, res) => {
 // Get admin dashboard with all users' data
 router.get('/admin', [auth, adminAuth], async (req, res) => {
   try {
-    const { startDate, endDate, week, month, year } = req.query;
-    let dateFilter = {};
-
-    if (startDate && endDate) {
-      dateFilter = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
-      };
-    } else if (week) {
-      // Get specific week of current month (calendar-based weeks)
-      const weekNum = parseInt(week);
-      
-      // Use current month/year if not specified
-      const targetMonth = month ? parseInt(month) - 1 : moment().month(); // moment months are 0-based
-      const targetYear = year ? parseInt(year) : moment().year();
-      
-      const monthStart = moment().year(targetYear).month(targetMonth).date(1).startOf('day');
-      const monthEnd = moment().year(targetYear).month(targetMonth).endOf('month').endOf('day');
-      
-      let start, end;
-      
-      if (weekNum === 1) {
-        // Week 1: 1st to 7th
-        start = monthStart.clone().date(1);
-        end = monthStart.clone().date(7).endOf('day');
-      } else if (weekNum === 2) {
-        // Week 2: 8th to 14th  
-        start = monthStart.clone().date(8);
-        end = monthStart.clone().date(14).endOf('day');
-      } else if (weekNum === 3) {
-        // Week 3: 15th to 21st
-        start = monthStart.clone().date(15);
-        end = monthStart.clone().date(21).endOf('day');
-      } else if (weekNum === 4) {
-        // Week 4: 22nd to end of month
-        start = monthStart.clone().date(22);
-        end = monthEnd.clone();
-      } else {
-        // Invalid week number, default to current week
-        const now = moment();
-        start = now.clone().startOf('week');
-        end = now.clone().endOf('week');
-      }
-      
-      // Ensure we don't go beyond the month boundaries
-      if (end.isAfter(monthEnd)) {
-        end = monthEnd.clone();
-      }
-      
-      dateFilter = { $gte: start.toDate(), $lte: end.toDate() };
+    const { week, month, year } = req.query;
+    const targetYear = year ? parseInt(year) : moment().year();
+    const targetMonth = month ? parseInt(month) : moment().month() + 1;
+    const monthWeeks = WeeklyCalculationService.getWeekBoundaries(
+      moment().year(targetYear).month(targetMonth - 1).date(1).toDate()
+    );
+    let targetWeekNum;
+    if (week) {
+      targetWeekNum = parseInt(week);
     } else {
-      // Default to current week
-      const start = moment().startOf('week').toDate();
-      const end = moment().endOf('week').toDate();
-      dateFilter = { $gte: start, $lte: end };
+      const today = moment();
+      const w = monthWeeks.find(wk => today.isBetween(moment(wk.weekStart), moment(wk.weekEnd), null, '[]'));
+      targetWeekNum = w ? w.week : monthWeeks[0].week;
     }
+    const targetWeekInfo = monthWeeks.find(w => w.week === targetWeekNum) || monthWeeks[0];
 
-    // Get all users, meals, and purchases
-    const [users, allMeals, allPurchases] = await Promise.all([
-      User.find({}).select('name email role advanceBalance'),
-      Meal.find({ date: dateFilter }).populate('user', 'name email'),
-      Purchase.find({ date: dateFilter }).populate('user', 'name email')
-    ]);
-
-    // Calculate per-user breakdown
+    // Get all users
+    const users = await User.find({}).select('name email role');
     const userBreakdown = [];
-    
+
     for (const user of users) {
-      const userMeals = allMeals.filter(meal => meal.user._id.toString() === user._id.toString());
-      const userPurchases = allPurchases.filter(purchase => purchase.user._id.toString() === user._id.toString());
-      
-      const totalMeals = userMeals.length;
-      const totalPurchases = userPurchases.reduce((sum, purchase) => sum + purchase.amount, 0);
-      
-      // Calculate user's share of expenses
-      let userTotalExpense = 0;
-      const dailyMealCounts = {};
-      const dailyPurchaseTotals = {};
-      
-      // Group by date
-      allMeals.forEach(meal => {
-        const dateKey = moment(meal.date).format('YYYY-MM-DD');
-        if (!dailyMealCounts[dateKey]) {
-          dailyMealCounts[dateKey] = 0;
-        }
-        dailyMealCounts[dateKey]++;
+      // Fetch or compute weekly record for each user
+      let record = await WeeklyBalance.findOne({
+        user: user._id,
+        year: targetWeekInfo.year,
+        month: targetWeekInfo.month,
+        week: targetWeekInfo.week
       });
-      
-      allPurchases.forEach(purchase => {
-        const dateKey = moment(purchase.date).format('YYYY-MM-DD');
-        if (!dailyPurchaseTotals[dateKey]) {
-          dailyPurchaseTotals[dateKey] = 0;
-        }
-        dailyPurchaseTotals[dateKey] += purchase.amount;
-      });
-      
-      // Calculate user's daily expenses
-      // Group user meals by date to avoid double counting
-      const userMealsByDate = {};
-      userMeals.forEach(meal => {
-        const dateKey = moment(meal.date).format('YYYY-MM-DD');
-        if (!userMealsByDate[dateKey]) {
-          userMealsByDate[dateKey] = 0;
-        }
-        userMealsByDate[dateKey]++;
-      });
-      
-      // Calculate total expense for all days
-      Object.keys(userMealsByDate).forEach(dateKey => {
-        const userMealsOnDay = userMealsByDate[dateKey];
-        const dayTotalMeals = dailyMealCounts[dateKey] || 1;
-        const dayTotalPurchases = dailyPurchaseTotals[dateKey] || 0;
-        const costPerMeal = dayTotalPurchases / dayTotalMeals;
-        userTotalExpense += userMealsOnDay * costPerMeal;
-      });
-      
-      const rawBalance = totalPurchases - userTotalExpense;
-      const advanceBalance = user.advanceBalance || 0;
-      const finalBalance = rawBalance + advanceBalance;
-      
+      if (!record) {
+        const calcData = await WeeklyCalculationService.calculateWeeklyBalance(user._id, targetWeekInfo);
+        record = await WeeklyBalance.findOneAndUpdate(
+          { user: user._id, year: targetWeekInfo.year, month: targetWeekInfo.month, week: targetWeekInfo.week },
+          calcData,
+          { upsert: true, new: true }
+        );
+      }
       userBreakdown.push({
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role
-        },
-        totalMeals,
-        totalPurchases,
-        totalExpense: userTotalExpense,
-        advanceBalance,
-        rawBalance,
-        balance: finalBalance,
-        isDue: finalBalance < 0,
-        finalAmount: Math.abs(finalBalance),
-        status: finalBalance < 0 ? 'Due' : 'Credit'
+        user: { id: user._id, name: user.name, email: user.email, role: user.role },
+        week: record.week,
+        meals: record.totalMeals,
+        purchases: record.totalPurchases,
+        advancePayments: record.totalAdvancePayments,
+        expense: record.totalExpense,
+        previousAdvance: record.advanceFromPreviousWeek,
+        balance: record.weeklyBalance,
+        carryForwardAdvance: record.advanceToNextWeek,
+        advanceBalance: record.advanceToNextWeek, // for UI compatibility
+        isDue: record.isDue,
+        finalAmount: record.finalAmount,
+        status: record.status
       });
     }
 
-    // System totals
-    const systemTotalMeals = allMeals.length;
-    const systemTotalPurchases = allPurchases.reduce((sum, purchase) => sum + purchase.amount, 0);
-    const totalDue = userBreakdown.filter(u => u.isDue).reduce((sum, u) => sum + u.finalAmount, 0);
-    const totalRefund = userBreakdown.filter(u => !u.isDue).reduce((sum, u) => sum + u.finalAmount, 0);
+    const totalMeals = userBreakdown.reduce((s, u) => s + u.meals, 0);
+    const totalPurchases = userBreakdown.reduce((s, u) => s + u.purchases, 0);
+    const totalAdvancePayments = userBreakdown.reduce((s, u) => s + (u.advancePayments || 0), 0);
+    const totalExpense = userBreakdown.reduce((s, u) => s + u.expense, 0);
+    const totalCredit = userBreakdown.filter(u => !u.isDue).reduce((s, u) => s + u.finalAmount, 0);
+    const totalDue = userBreakdown.filter(u => u.isDue).reduce((s, u) => s + u.finalAmount, 0);
 
-    const adminDashboard = {
+    res.json({
       systemStats: {
         totalUsers: users.length,
-        totalMeals: systemTotalMeals,
-        totalPurchases: systemTotalPurchases,
-        averageCostPerMeal: systemTotalMeals > 0 ? systemTotalPurchases / systemTotalMeals : 0,
+        totalMeals,
+        totalPurchases,
+        totalAdvancePayments,
+        totalExpense,
+        totalCredit,
         totalDue,
-        totalRefund,
-        netBalance: totalRefund - totalDue
+        netBalance: totalCredit - totalDue,
+        week: `Week ${targetWeekInfo.week}`,
+        weekRange: `${moment(targetWeekInfo.weekStart).format('MMM DD')} - ${moment(targetWeekInfo.weekEnd).format('MMM DD')}`,
+        monthYear: moment().year(targetYear).month(targetMonth - 1).format('MMMM YYYY'),
+        calculationMethod: 'Weekly Reset System'
       },
       userBreakdown: userBreakdown.sort((a, b) => b.balance - a.balance),
-      dateRange: {
-        start: Object.keys(dateFilter).length > 0 ? dateFilter.$gte : null,
-        end: Object.keys(dateFilter).length > 0 ? dateFilter.$lte : null
-      }
-    };
-
-    res.json(adminDashboard);
+      weeksInMonth: monthWeeks.length
+    });
   } catch (error) {
     console.error('Admin dashboard error:', error);
     res.status(500).json({ message: 'Server error fetching admin dashboard data' });

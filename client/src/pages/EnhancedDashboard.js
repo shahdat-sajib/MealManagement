@@ -346,25 +346,25 @@ const EnhancedDashboard = () => {
                       {formatCurrency(week.expense)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-purple-600">
-                      {formatCurrency(week.advanceFromPrevious)}
+                      {formatCurrency(week.advanceFromPrevious || 0)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">
-                      {formatCurrency(week.advanceViaPurchase)}
+                      {formatCurrency(week.advanceViaPurchase || 0)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <span className={week.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
-                        {formatCurrency(week.amount)}
+                        {formatCurrency(Math.abs(week.balance))} {week.balance >= 0 ? 'Cr' : 'Due'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         week.isDue 
                           ? 'bg-red-100 text-red-800' 
-                          : week.status === 'Credit'
+                          : week.balance > 0
                           ? 'bg-green-100 text-green-800'
                           : 'bg-gray-100 text-gray-800'
                       }`}>
-                        {week.status}
+                        {week.balance > 0 ? 'Credit' : (week.isDue ? 'Due' : 'Balanced')}
                       </span>
                     </td>
                   </tr>
