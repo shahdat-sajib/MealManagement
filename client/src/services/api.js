@@ -164,10 +164,32 @@ export const advancePaymentsApi = {
   deletePayment: (paymentId) => apiCall('DELETE', `/advance-payments/${paymentId}`)
 };
 
+// Due Adjustments API
+export const dueAdjustmentsApi = {
+  async getAdjustments(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    return await apiCall('GET', `/due-adjustments${query ? '?' + query : ''}`);
+  },
+
+  async makeAdjustment(adjustmentData) {
+    return await apiCall('POST', '/due-adjustments/adjust', adjustmentData);
+  },
+
+  async getUserAdjustments(userId, params = {}) {
+    const query = new URLSearchParams(params).toString();
+    return await apiCall('GET', `/due-adjustments/user/${userId}${query ? '?' + query : ''}`);
+  },
+
+  async deleteAdjustment(adjustmentId) {
+    return await apiCall('DELETE', `/due-adjustments/${adjustmentId}`);
+  }
+};
+
 export default {
   meals: mealsApi,
   purchases: purchasesApi,
   dashboard: dashboardApi,
   users: usersApi,
-  advancePayments: advancePaymentsApi
+  advancePayments: advancePaymentsApi,
+  dueAdjustments: dueAdjustmentsApi
 };

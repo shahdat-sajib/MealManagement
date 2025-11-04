@@ -145,7 +145,7 @@ const Dashboard = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
         <div className="card">
           <div className="flex items-center">
             <div className="p-2 bg-primary-100 rounded-lg">
@@ -188,10 +188,26 @@ const Dashboard = () => {
               <span className="text-2xl">💳</span>
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Advance Balance</p>
+              <p className="text-sm font-medium text-gray-600">Week Advance Payments</p>
               <p className="text-2xl font-bold text-purple-600">
-                {formatCurrency(summary?.advanceBalance || 0)}
+                {formatCurrency(summary?.totalAdvancePayments || 0)}
               </p>
+              <p className="text-xs text-gray-500">This week only</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="flex items-center">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <span className="text-2xl">📈</span>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Previous Purchases</p>
+              <p className="text-2xl font-bold text-blue-600">
+                {formatCurrency(summary?.previousPurchaseCarryForward || 0)}
+              </p>
+              <p className="text-xs text-gray-500">Carried forward</p>
             </div>
           </div>
         </div>
@@ -206,10 +222,76 @@ const Dashboard = () => {
               <p className={`text-2xl font-bold ${summary?.isDue ? 'text-red-600' : 'text-green-600'}`}>
                 {formatCurrency(summary?.finalAmount || 0)}
               </p>
+              {summary?.totalDueAdjustments !== 0 && (
+                <p className="text-xs text-orange-600">
+                  Adj: {formatCurrency(summary?.totalDueAdjustments || 0)}
+                </p>
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Weekly Calculation Breakdown */}
+      {summary && (
+        <div className="card">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">📊 Weekly Calculation Breakdown</h3>
+          <div className="bg-gray-50 rounded-lg p-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+              <div className="bg-white rounded-lg p-4">
+                <div className="text-sm text-gray-600">Previous Purchases</div>
+                <div className="text-lg font-bold text-blue-600">
+                  +{formatCurrency(summary.previousPurchaseCarryForward || 0)}
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-lg p-4">
+                <div className="text-sm text-gray-600">This Week</div>
+                <div className="text-lg font-bold text-green-600">
+                  +{formatCurrency((summary.totalPurchases || 0) + (summary.totalAdvancePayments || 0))}
+                </div>
+                <div className="text-xs text-gray-500">
+                  Purchases + Advance
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-lg p-4">
+                <div className="text-sm text-gray-600">Meal Cost</div>
+                <div className="text-lg font-bold text-red-600">
+                  -{formatCurrency(summary.totalExpense || 0)}
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-lg p-4">
+                <div className="text-sm text-gray-600">Final Balance</div>
+                <div className={`text-xl font-bold ${summary.isDue ? 'text-red-600' : 'text-green-600'}`}>
+                  {formatCurrency(summary.finalAmount || 0)}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {summary.status}
+                </div>
+              </div>
+            </div>
+            
+            {summary.totalDueAdjustments !== 0 && (
+              <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                <div className="text-sm text-orange-800">
+                  <strong>Admin Adjustments:</strong> {formatCurrency(summary.totalDueAdjustments)}
+                  <div className="text-xs mt-1">
+                    Original Balance: {formatCurrency(summary.weeklyBalance)} → Adjusted: {formatCurrency(summary.finalCalculation)}
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div className="mt-4 text-center">
+              <div className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                💡 Advance payments only affect this week - no carry forward to next week
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -285,13 +367,16 @@ const Dashboard = () => {
                   Meals
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Purchases
+                  Purchases + Advance
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Expenses
+                  Meal Cost
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Balance
+                  Previous Carry
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Week Balance
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
@@ -312,15 +397,26 @@ const Dashboard = () => {
                       {week.meals}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatCurrency(week.purchases)}
+                      {formatCurrency((week.purchases || 0) + (week.advancePayments || 0))}
+                      {week.advancePayments > 0 && (
+                        <div className="text-xs text-purple-600">
+                          Adv: {formatCurrency(week.advancePayments)}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatCurrency(week.expense)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">
+                      {formatCurrency(week.advanceFromPrevious || 0)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <span className={week.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
                         {formatCurrency(week.amount)}
                       </span>
+                      <div className="text-xs text-gray-500">
+                        Week-only impact
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${

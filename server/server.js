@@ -71,6 +71,7 @@ app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/advance-payments', require('./routes/advancePayments'));
 app.use('/api/calculation', require('./routes/calculation'));
 app.use('/api/payment-receipts', require('./routes/paymentReceipts'));
+app.use('/api/due-adjustments', require('./routes/dueAdjustments'));
 
 // Test CORS endpoint
 app.get('/api/test-cors', (req, res) => {

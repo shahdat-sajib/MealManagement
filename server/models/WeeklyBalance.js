@@ -49,26 +49,22 @@ const weeklyBalanceSchema = new mongoose.Schema({
     default: 0
   },
   
-  // Weekly Balance Calculation
+  // Weekly Balance Calculation (Week-Only Impact)
   weeklyBalance: {
     type: Number,
     default: 0
   },
-  advanceFromPreviousWeek: {
+  purchaseCarryFromPreviousWeek: {
     type: Number,
     default: 0
   },
-  advanceViaPurchase: {
-    type: Number,
-    default: 0
-  },
-  advanceViaPayments: {
-    type: Number,
+  purchaseCarryForward: {
+    type: Number, 
     default: 0
   },
   advanceToNextWeek: {
     type: Number,
-    default: 0
+    default: 0 // Always 0 in new system - advance payments don't carry forward
   },
   
   // Status
@@ -84,6 +80,16 @@ const weeklyBalanceSchema = new mongoose.Schema({
     type: String,
     enum: ['Due', 'Credit', 'Balanced'],
     default: 'Balanced'
+  },
+  
+  // Direct Due Adjustments
+  totalDueAdjustments: {
+    type: Number,
+    default: 0
+  },
+  adjustedBalance: {
+    type: Number,
+    default: 0
   },
   
   // Calculation metadata

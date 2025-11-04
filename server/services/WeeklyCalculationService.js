@@ -157,23 +157,26 @@ class WeeklyCalculationService {
       const totalPurchases = userPurchases.reduce((sum, p) => sum + p.amount, 0);
       const totalAdvancePayments = userAdvancePayments.reduce((sum, ap) => sum + ap.amount, 0);
       
-      // Get advance from previous week (includes both purchase-based and advance payment based)
+      // Get purchase carry forward from previous week (advance payments don't carry forward)
       const previousWeekBalance = await this.getPreviousWeekAdvance(userId, weekInfo);
       
-      // CLEAR WEEKLY CALCULATION LOGIC:
+      // NEW WEEKLY-ONLY CALCULATION LOGIC:
       // 1. Each week starts fresh (meal count, meal cost calculated from 0)
-      // 2. Advance Balance = Previous week carry forward + Current week advance payments + Current week purchases
-      // 3. Final Calculation = Advance Balance - Meal Cost
-      // 4. If Final > 0 = Credit (carry forward to next week)
-      // 5. If Final < 0 = Due (no carry forward)
+      // 2. Week Balance = Previous week purchases + Current week purchases + Current week advance payments - Current week meal cost
+      // 3. Previous week carry forward only includes purchases, NOT advance payments
+      // 4. Advance payments only affect the specific week they're added to
+      // 5. If Week Balance > 0 = Credit for this week only
+      // 6. If Week Balance < 0 = Due for this week only
       
-      const previousAdvance = previousWeekBalance.advanceFromPreviousWeek;
-      const advanceBalance = previousAdvance + totalAdvancePayments + totalPurchases;
-      const finalCalculation = advanceBalance - userTotalExpense;
+      const previousPurchasesCarryForward = previousWeekBalance.purchaseCarryForward || 0;
+      const weekBalance = previousPurchasesCarryForward + totalPurchases + totalAdvancePayments - userTotalExpense;
       
-      const isDue = finalCalculation < 0;
-      const finalAmount = Math.abs(finalCalculation);
-      const advanceToNextWeek = finalCalculation > 0 ? finalCalculation : 0;
+      const isDue = weekBalance < 0;
+      const finalAmount = Math.abs(weekBalance);
+      
+      // Only purchases carry forward to next week, not advance payments
+      const purchaseCarryForward = weekBalance > 0 ? (previousPurchasesCarryForward + totalPurchases) : 0;
+      const advanceToNextWeek = 0; // Advance payments don't carry forward anymore
       
       return {
         user: userId,
@@ -189,16 +192,16 @@ class WeeklyCalculationService {
         totalAdvancePayments,
         totalExpense: userTotalExpense, // This week's meal cost
         
-        // Advance calculation
-        advanceFromPreviousWeek: previousAdvance,
-        advanceBalance, // Total advance available this week
-        weeklyBalance: finalCalculation, // Final calculation result
-        advanceToNextWeek, // Carry forward to next week
+        // Weekly-only calculation
+        purchaseCarryFromPreviousWeek: previousPurchasesCarryForward, // Only purchases carry forward
+        weeklyBalance: weekBalance, // Final calculation result for this week only
+        advanceToNextWeek, // Always 0 - advance payments don't carry forward
+        purchaseCarryForward, // Only purchases carry forward to next week
         
         // Status
         isDue,
         finalAmount,
-        status: isDue ? 'Due' : (finalCalculation > 0 ? 'Credit' : 'Balanced'),
+        status: isDue ? 'Due' : (weekBalance > 0 ? 'Credit' : 'Balanced'),
         calculatedAt: new Date(),
         recalculated: true
       };
@@ -210,7 +213,7 @@ class WeeklyCalculationService {
   }
   
   /**
-   * Get advance from previous week
+   * Get purchase carry forward from previous week (advance payments don't carry forward)
    */
   static async getPreviousWeekAdvance(userId, currentWeekInfo) {
     try {
@@ -247,13 +250,14 @@ class WeeklyCalculationService {
         week: previousWeek
       });
       
+      // Only purchases carry forward from previous week, not advance payments
       return {
-        advanceFromPreviousWeek: previousWeekBalance ? previousWeekBalance.advanceToNextWeek : 0
+        purchaseCarryForward: previousWeekBalance ? (previousWeekBalance.purchaseCarryForward || 0) : 0
       };
       
     } catch (error) {
-      console.error('Error getting previous week advance:', error);
-      return { advanceFromPreviousWeek: 0 };
+      console.error('Error getting previous week purchase carry forward:', error);
+      return { purchaseCarryForward: 0 };
     }
   }
   

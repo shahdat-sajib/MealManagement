@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { dashboardApi, mealsApi, purchasesApi } from '../services/api';
 import { formatCurrency, formatDateForDisplay, formatDateForAPI, generateColors, getWeekDateRange, getCurrentMonthYear, getMonthOptions, getFilterDescription } from '../utils/helpers';
 import AdvancePaymentManager from '../components/AdvancePaymentManager';
+import DueAdjustmentManager from '../components/DueAdjustmentManager';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import toast from 'react-hot-toast';
@@ -363,6 +364,16 @@ const AdminDashboard = () => {
             💰 Advance Payments
           </button>
           <button
+            onClick={() => setActiveTab('due-adjustments')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+              activeTab === 'due-adjustments'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            🔧 Due Adjustments
+          </button>
+          <button
             onClick={() => setActiveTab('meal-reports')}
             className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
               activeTab === 'meal-reports'
@@ -388,6 +399,8 @@ const AdminDashboard = () => {
       {/* Tab Content */}
       {activeTab === 'payments' ? (
         <AdvancePaymentManager />
+      ) : activeTab === 'due-adjustments' ? (
+        <DueAdjustmentManager />
       ) : activeTab === 'meal-reports' ? (
         <div className="space-y-6">
           {/* Meal Reports Section */}
@@ -865,16 +878,19 @@ const AdminDashboard = () => {
                   Meals
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Purchases
+                  Week Purchases
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Expenses
+                  Week Advance Pay
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Advance Balance
+                  Meal Cost
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Final Balance
+                  Week Balance
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Adjustments
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
@@ -900,22 +916,26 @@ const AdminDashboard = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {user.totalMeals}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCurrency(user.totalPurchases)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCurrency(user.totalExpense)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <span className="text-purple-600">
-                      {formatCurrency(user.advanceBalance || 0)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <span className={user.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
-                      {formatCurrency(Math.abs(user.balance))}
-                    </span>
-                  </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {formatCurrency(user.totalPurchases)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-purple-600">
+                      {formatCurrency(user.totalAdvancePayments || 0)}
+                      {user.totalAdvancePayments > 0 && (
+                        <div className="text-xs text-gray-500">Week only</div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {formatCurrency(user.totalExpense)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <span className={user.finalCalculation >= 0 ? 'text-green-600' : 'text-red-600'}>
+                        {formatCurrency(Math.abs(user.finalCalculation))}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-orange-600">
+                      {user.totalDueAdjustments ? formatCurrency(user.totalDueAdjustments) : '-'}
+                    </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                       user.isDue 
